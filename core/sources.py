@@ -17,13 +17,11 @@ import json
 import os
 import re
 import socket
-import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 
 from . import ASSETS, ROOT
 
@@ -48,28 +46,13 @@ def keys_path():
     return ROOT / "keys.json"
 
 
-def _user_keys_path():
-    if os.name == "nt":
-        base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-    elif sys.platform == "darwin":
-        base = str(Path.home() / "Library" / "Application Support")
-    else:
-        base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(base) / "netshot" / "keys.json"
-
-
 def ensure_keys_file():
-    """Create keys.json in the application folder when it is missing: a copy of the old user file
-    (%APPDATA%\\netshot\\keys.json, left in place) when there is one, else an empty template.
+    """Create an empty keys.json template in the application folder when it is missing.
     Exclusive creation ("x"): an existing keys.json is never overwritten."""
     path = keys_path()
     if path.exists():
         return
-    try:
-        content = _user_keys_path().read_text(encoding="utf-8")
-        json.loads(content)
-    except (OSError, ValueError):
-        content = json.dumps({name: "" for name, _, _ in KEY_SOURCES}, indent=2)
+    content = json.dumps({name: "" for name, _, _ in KEY_SOURCES}, indent=2)
     try:
         with open(path, "x", encoding="utf-8") as f:
             f.write(content)
