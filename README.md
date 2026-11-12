@@ -4,8 +4,10 @@ Inventaire et capture d'écran des services web exposés, à partir d'IP, de sub
 d'AS, de noms d'hôte, d'exports CSV (AD, ADCS, CMDB) ou de sous-domaines trouvés par des sources
 passives. Les IP trouvées sont enrichies avec des sources gratuites (ports et CVE connus, fuites,
 priorisation KEV / EPSS).
-Version Python ; même fonctionnement que la version Go (projet `netshot-go`), clés API partagées.
+Version Python ; même fonctionnement que la version Go (projet `netshot-go`).
 `keys.json` (clés API) et `settings.json` (thème) ne sont jamais versionnés (`.gitignore`).
+
+![NetShot (Python) : onglet Scan après une capture de example.com et example.org](docs/netshot-python.png)
 
 ```
 netshot/
