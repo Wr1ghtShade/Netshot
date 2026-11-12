@@ -133,9 +133,9 @@ système de Windows s'il y en a un. Par défaut, seuls les noms qui résolvent e
 ### Clés API
 
 Comptes gratuits. Les clés sont dans **`keys.json` à la racine du dossier** (à côté de `netshot.py`).
-S'il manque au lancement, il est créé : copie de l'ancien `%APPDATA%\netshot\keys.json` s'il existe
-(laissé en place), sinon modèle vide. Un `keys.json` existant n'est jamais écrasé. Fichier en clair,
-exclu de git : ne pas partager un dossier qui le contient.
+S'il manque au lancement, un modèle vide est créé ; un `keys.json` existant n'est jamais écrasé.
+À l'enregistrement, seuls les champs remplis sont modifiés et l'ancien fichier est gardé en
+`keys.json.bak`. Fichier en clair, exclu de git : ne pas partager un dossier qui le contient.
 Saisie : onglet « Clés API » de l'interface, ou :
 
 ```bash
@@ -216,24 +216,44 @@ service, et `exposure.csv`. Désactivable avec `--no-enrich` ou la case de l'int
 python netshot_gui.py
 ```
 
-Onglets, dans l'ordre du déroulé : **◎ Domaine** (ouvert au démarrage : sources passives, celles à clé
-grisées tant que la clé manque, liste des sous-domaines trouvés), **▶ Scan** (cibles, options, user
-agents, lancement, case « Analyser les certificats TLS »), **☰ DNS** (enregistrements comme dig, constats, ajout des hôtes aux cibles, copie au format
-dig), **ℹ Whois** (propriétaire d'un domaine, d'une IP ou d'un AS, constats, texte WHOIS brut ;
-toute la hauteur de la fenêtre, journal et aperçu masqués),
-**✔ Certificats** (analyse TLS, détail au clic), **⚠ Leaks** (fuites de données LeakCheck) et
-**⚿ Clés API**. Bouton **☾ Sombre / ☀ Clair** en haut à droite : thème sombre ou clair, choix gardé dans
-`settings.json` (sans choix enregistré, le réglage de Windows « mode sombre des applications » est suivi). Les icônes sont des symboles
-simples : Tk 8.6 n'affiche pas les emojis couleur. Boutons **Copier** et **Reset**
-sur les zones de texte, les tableaux et le journal. Journal et aperçu
-toujours visibles en bas. Dans l'onglet Scan : saisie ou chargement des cibles (texte, CSV, `AS1234`),
-case « Enrichir les IP », choix des ports, du dossier de sortie, du délai entre captures et de la résolution
-(1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile), sélection des user agents
-(Navig. / Bots / Tous / Aucun + UA personnalisé), barre de progression, journal (3 000 dernières
-lignes), aperçu de la dernière capture (clic = ouvrir en grand, **Effacer** pour le vider ; le
-**Reset** du journal vide aussi l'aperçu, le fichier PNG reste dans le dossier), boutons Arrêter, Ouvrir le dossier,
-Ouvrir le rapport et Quitter. Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de
-sortie (par défaut `netshot\screenshots\`).
+Ou double-clic sur `netshot_gui.cmd` (créé par le script d'installation). La fenêtre s'ouvre
+centrée sur l'écran.
+
+#### Onglets
+
+Dans l'ordre du déroulé d'une reconnaissance :
+
+| Onglet | Rôle |
+|---|---|
+| **◎ Domaine** | Ouvert au démarrage. Recherche de sous-domaines dans les sources passives ; les sources à clé restent grisées tant que la clé manque. Les noms trouvés sont ajoutés aux cibles du Scan. |
+| **▶ Scan** | Cibles, options, user agents, lancement des captures. |
+| **☰ DNS** | Enregistrements d'un domaine (comme dig), constats, ajout des hôtes aux cibles, copie au format dig. |
+| **ℹ Whois** | Propriétaire d'un domaine, d'une IP ou d'un AS : tableau à gauche, texte WHOIS brut à droite, constats. L'onglet occupe toute la hauteur de la fenêtre. |
+| **✔ Certificats** | Analyse TLS des services https trouvés, détail au clic. |
+| **⚠ Leaks** | Fuites de données (LeakCheck, clé requise) : mots de passe masqués par défaut, tri, export CSV. |
+| **⚿ Clés API** | Saisie des clés des services gratuits. Seuls les champs remplis sont enregistrés, `-` supprime une clé. |
+
+#### Onglet Scan
+
+- **Cibles** : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou chargement d'un fichier texte ou CSV.
+- **Options** : ports, dossier de sortie, nombre de tests en parallèle, timeouts, délai entre deux captures,
+  résolution (1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile).
+- **Cases** : « Enrichir les IP » (Shodan, LeakIX, KEV, EPSS), « Analyser les certificats TLS »,
+  « Inscrire l'URL sur les captures » (bandeau hôte:port, URL, statut et date en bas de chaque image).
+- **User agents** : sélection rapide Navig. / Bots / Tous / Aucun, ou UA personnalisé.
+- **Pendant le scan** : barre de progression, boutons Arrêter, Ouvrir le dossier, Ouvrir le rapport.
+- **Dernière capture** : aperçu affiché à côté du journal ; clic pour l'ouvrir en grand, **Effacer** pour le vider
+  (le fichier PNG reste dans le dossier).
+
+Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par défaut `netshot\screenshots\`).
+
+#### Partout
+
+- **Journal** en bas de chaque onglet, sauf Whois (3 000 dernières lignes). Son bouton **Reset** vide aussi l'aperçu de capture.
+- Boutons **Copier** et **Reset** sur les zones de texte, les tableaux et le journal.
+- **☾ Sombre / ☀ Clair** en haut à droite. Le choix est gardé dans `settings.json` ; sans choix enregistré,
+  le réglage Windows « mode sombre des applications » est suivi.
+- Les icônes des onglets sont des symboles simples : Tk 8.6 n'affiche pas les emojis en couleur.
 
 ## Options
 
