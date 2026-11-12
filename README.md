@@ -32,7 +32,7 @@ netshot/
 
 Les commandes se lancent depuis le dossier `netshot`.
 
-## Installation
+## 📦 Installation
 
 Prérequis : Python 3.9 ou plus récent. Les scripts créent un environnement isolé `.venv` dans le
 dossier (le Python du système n'est pas modifié), installent Playwright, téléchargent Chromium
@@ -65,7 +65,7 @@ pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
-## Utilisation
+## 🚀 Utilisation
 
 ```bash
 python netshot.py 192.168.1.0/24
@@ -74,12 +74,12 @@ python netshot.py -f examples/targets.example.txt -p 80,443,8080,8443 -o capture
 
 Fichier de cibles : une cible par ligne, `#` pour les commentaires (voir `examples/targets.example.txt`).
 
-### Limite de débit
+### ⏱️ Limite de débit
 
 `-d 2` : au plus un chargement de page toutes les 2 secondes, tous threads confondus.
 Les tests de port TCP restent parallèles.
 
-### User agents
+### 🕵️ User agents
 
 Une capture par user agent, pour voir si un site répond différemment selon le visiteur.
 
@@ -101,7 +101,7 @@ Limite : seul l'en-tête `User-Agent` change. La page reste chargée par Chromiu
 autres en-têtes (`Accept`, `sec-ch-ua`…) et exécute le JavaScript. Un vrai `curl` peut donc obtenir
 une réponse différente.
 
-### Sources passives de sous-domaines
+### 🔎 Sources passives de sous-domaines
 
 ```bash
 python netshot.py --ct exemple.fr                       # ajoute les sous-domaines aux cibles
@@ -130,7 +130,7 @@ Les sources sont interrogées en parallèle. Seul le nom de domaine leur est env
 système de Windows s'il y en a un. Par défaut, seuls les noms qui résolvent encore dans le DNS sont gardés.
 `--ct-only` ne demande pas Playwright.
 
-### Clés API
+### 🔑 Clés API
 
 Comptes gratuits. Les clés sont dans **`keys.json` à la racine du dossier** (à côté de `netshot.py`).
 S'il manque au lancement, un modèle vide est créé ; un `keys.json` existant n'est jamais écrasé.
@@ -144,7 +144,7 @@ python netshot.py --key domscan=XXXX --key leakix=YYYY --save-keys
 
 Une variable `NETSHOT_KEY_<SOURCE>` (ex. `NETSHOT_KEY_DOMSCAN`) remplace la clé du fichier.
 
-### Plages d'un AS et import CSV
+### 🌍 Plages d'un AS et import CSV
 
 - Une cible `AS1234` est remplacée par les plages IPv4 annoncées par l'AS (RIPEstat, sans clé).
 - `-f` et le bouton « Charger fichier / CSV » acceptent un export CSV (`,` ou `;`) : les colonnes
@@ -155,7 +155,7 @@ Get-ADComputer -Filter * -Properties DNSHostName,IPv4Address | Select DNSHostNam
 certutil -view -restrict "Disposition=20" -out "CommonName,SAN" csv > adcs.csv
 ```
 
-### DNS d'un domaine (comme dig)
+### 🧭 DNS d'un domaine (comme dig)
 
 ```bash
 python netshot.py --dns exemple.fr                      # résolveurs du système
@@ -169,7 +169,7 @@ A, AAAA, CNAME, NS, SOA, MX, TXT, CAA, DS, DNSKEY, HTTPS, et les noms utiles (`w
 DNSSEC, MTA-STS, AD visible. Les serveurs du système sont lus dans le registre Windows
 (ou `/etc/resolv.conf`).
 
-### Whois d'un domaine, d'une IP ou d'un AS
+### 🪪 Whois d'un domaine, d'une IP ou d'un AS
 
 ```bash
 python netshot.py --whois exemple.fr --whois 8.8.8.8 --whois AS3215   # puis quitte
@@ -184,7 +184,7 @@ Un sous-domaine est cherché sous son domaine enregistré. Constats pour un doma
 proche, verrou de transfert, verrou du registre, DNSSEC, titulaire masqué. Dans l'interface :
 onglet **ℹ Whois**.
 
-### Certificats et configuration TLS (comme sslscan)
+### 🔒 Certificats et configuration TLS (comme sslscan)
 
 ```bash
 python netshot.py --tls exemple.fr --tls intranet:8443   # puis quitte
@@ -202,7 +202,7 @@ confiance vérifiée avec le magasin Windows, ALPN et HSTS. Résultats : `certif
 Limite de la version Python : avec un serveur uniquement TLS 1.3, la chaîne se limite au certificat
 du serveur (Python 3.10 ne donne pas les intermédiaires).
 
-### Enrichissement des IP
+### 🛰️ Enrichissement des IP
 
 Après le scan : DNS inverse, Shodan (avec clé : organisation, ASN, pays, OS, service par port avec
 version et titre, CVE ; sans clé : InternetDB gratuit avec ports, CPE et CVE), LeakIX (clé gratuite),
@@ -210,7 +210,7 @@ CISA KEV (CVE exploitées, en rouge) et EPSS (tri). Seules les IP **publiques** 
 Shodan et LeakIX. Résultat : tableau « Exposition » en tête du rapport, ligne de synthèse sous chaque
 service, et `exposure.csv`. Désactivable avec `--no-enrich` ou la case de l'interface.
 
-## Interface graphique
+## 🖥️ Interface graphique
 
 ```bash
 python netshot_gui.py
@@ -219,7 +219,7 @@ python netshot_gui.py
 Ou double-clic sur `netshot_gui.cmd` (créé par le script d'installation). La fenêtre s'ouvre
 centrée sur l'écran.
 
-#### Onglets
+#### 🗂️ Onglets
 
 Dans l'ordre du déroulé d'une reconnaissance :
 
@@ -233,7 +233,7 @@ Dans l'ordre du déroulé d'une reconnaissance :
 | **⚠ Leaks** | Fuites de données (LeakCheck, clé requise) : mots de passe masqués par défaut, tri, export CSV. |
 | **⚿ Clés API** | Saisie des clés des services gratuits. Seuls les champs remplis sont enregistrés, `-` supprime une clé. |
 
-#### Onglet Scan
+#### 📸 Onglet Scan
 
 - **Cibles** : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou chargement d'un fichier texte ou CSV.
 - **Options** : ports, dossier de sortie, nombre de tests en parallèle, timeouts, délai entre deux captures,
@@ -247,7 +247,7 @@ Dans l'ordre du déroulé d'une reconnaissance :
 
 Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par défaut `netshot\screenshots\`).
 
-#### Partout
+#### 🧰 Partout
 
 - **Journal** en bas de chaque onglet, sauf Whois (3 000 dernières lignes). Son bouton **Reset** vide aussi l'aperçu de capture.
 - Boutons **Copier** et **Reset** sur les zones de texte, les tableaux et le journal.
@@ -255,7 +255,7 @@ Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par d
   le réglage Windows « mode sombre des applications » est suivi.
 - Les icônes des onglets sont des symboles simples : Tk 8.6 n'affiche pas les emojis en couleur.
 
-## Options
+## ⚙️ Options
 
 | Option | Rôle | Défaut |
 |---|---|---|
@@ -285,7 +285,7 @@ Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par d
 | `--width` / `--height` | taille de la fenêtre de capture | `1920x1080` |
 | `--max-hosts` | limite d'adresses | `65536` |
 
-## Résultats
+## 📊 Résultats
 
 Le dossier de sortie contient :
 
