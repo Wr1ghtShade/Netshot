@@ -1,0 +1,70 @@
+# NetShot - fichiers sensibles testés par --files sur chaque service web.
+# Format : chemin <TAB> gravité <TAB> signature (expression régulière que la réponse doit contenir).
+# Gravité : critique, haute, moyenne, info. Sans signature, la réponse doit seulement différer de
+# celle d'un chemin inexistant (page 404 personnalisée). Les lignes qui commencent par # sont ignorées.
+# Seuls les 64 premiers Ko de chaque réponse sont demandés (en-tête Range).
+.env	critique	(?m)^[A-Z][A-Z0-9_]{2,}\s*=
+.env.local	critique	(?m)^[A-Z][A-Z0-9_]{2,}\s*=
+.env.production	critique	(?m)^[A-Z][A-Z0-9_]{2,}\s*=
+.git/HEAD	critique	^ref: refs/
+.git/config	critique	\[core\]
+.svn/entries	haute	^(\d+\s|<\?xml)
+.hg/hgrc	haute	\[paths\]
+.DS_Store	moyenne	Bud1
+.htpasswd	critique	(?m)^[^:\s#]+:\S{8,}
+.htaccess	moyenne	(?i)(RewriteEngine|Deny from|Require |AuthType|Options )
+web.config	haute	<configuration
+web.config.bak	critique	<configuration
+wp-config.php.bak	critique	DB_PASSWORD
+wp-config.php~	critique	DB_PASSWORD
+wp-config.php.save	critique	DB_PASSWORD
+config.php.bak	critique	(?i)(password|passwd|db_pass)
+configuration.php.bak	critique	(?i)(password|\$secret)
+settings.php.bak	critique	(?i)(password|database)
+.npmrc	haute	(?i)(_auth|_authToken|registry=)
+.pypirc	haute	(?i)password
+.aws/credentials	critique	aws_access_key_id
+.ssh/id_rsa	critique	BEGIN (RSA |OPENSSH )?PRIVATE KEY
+id_rsa	critique	BEGIN (RSA |OPENSSH )?PRIVATE KEY
+.bash_history	haute	(?m)^(sudo|cd|ls|ssh|mysql|export)
+.vscode/sftp.json	critique	"(password|host)"
+.idea/workspace.xml	moyenne	<project version
+docker-compose.yml	moyenne	(?m)^services:
+Dockerfile	info	(?m)^FROM \S+
+composer.json	info	"require"
+package.json	info	"dependencies"
+backup.zip	critique	^PK\x03\x04
+site.zip	critique	^PK\x03\x04
+www.zip	critique	^PK\x03\x04
+backup.tar.gz	critique	^\x1f\x8b
+backup.sql	critique	(?i)(CREATE TABLE|INSERT INTO|-- MySQL dump|PostgreSQL database dump)
+dump.sql	critique	(?i)(CREATE TABLE|INSERT INTO|-- MySQL dump|PostgreSQL database dump)
+database.sql	critique	(?i)(CREATE TABLE|INSERT INTO|-- MySQL dump|PostgreSQL database dump)
+db.sql	critique	(?i)(CREATE TABLE|INSERT INTO|-- MySQL dump|PostgreSQL database dump)
+phpinfo.php	haute	<title>phpinfo\(\)
+info.php	haute	<title>phpinfo\(\)
+test.php	moyenne	<title>phpinfo\(\)
+server-status	haute	Apache Server Status
+server-info	haute	Apache Server Information
+nginx_status	moyenne	Active connections:
+actuator	moyenne	"_links"
+actuator/env	critique	"(propertySources|activeProfiles)"
+actuator/configprops	haute	"contexts"
+actuator/mappings	moyenne	"contexts"
+env	haute	"(propertySources|activeProfiles)"
+elmah.axd	haute	Error Log for
+trace.axd	haute	Application Trace
+crossdomain.xml	moyenne	allow-access-from domain="\*"
+clientaccesspolicy.xml	moyenne	domain uri="\*"
+swagger.json	info	"(swagger|openapi)"
+openapi.json	info	"openapi"
+v2/api-docs	info	"swagger"
+v3/api-docs	info	"openapi"
+swagger-ui.html	info	(?i)swagger ui
+graphiql	moyenne	(?i)graphiql
+.well-known/openid-configuration	info	"issuer"
+debug/pprof/	haute	(?i)profile descriptions
+_profiler/	haute	(?i)symfony profiler
+telescope	haute	(?i)laravel telescope
+adminer.php	haute	(?i)adminer
+phpmyadmin/	moyenne	(?i)phpmyadmin

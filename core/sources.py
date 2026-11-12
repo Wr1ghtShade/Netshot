@@ -38,6 +38,7 @@ KEY_SOURCES = [
     ("leakix", "LeakIX", "https://leakix.net/"),
     ("shodan", "Shodan", "https://account.shodan.io/"),
     ("leakcheck", "LeakCheck", "https://leakcheck.io/"),
+    ("nvd", "NVD (NIST)", "https://nvd.nist.gov/developers/request-an-api-key"),
 ]
 
 

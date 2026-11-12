@@ -22,6 +22,9 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from types import SimpleNamespace
 
+from .webinfo import dir_words
+from .scope import parse_proxy, read_exclusions
+from .recon import file_rules
 from . import ROOT as HERE, ASSETS
 from . import dns as netshot_dns
 from . import whois as netshot_whois
@@ -209,7 +212,15 @@ class NetshotApp:
 
         ttk.Label(main, text="Ports :").grid(row=2, column=0, sticky="w")
         self.ports = tk.StringVar(value=",".join(map(str, netshot.DEFAULT_PORTS)))
-        ttk.Entry(main, textvariable=self.ports).grid(row=2, column=1, columnspan=2, sticky="ew", pady=2)
+        ttk.Entry(main, textvariable=self.ports).grid(row=2, column=1, sticky="ew", pady=2)
+        presets = ttk.Menubutton(main, text="Préréglages ▾")
+        menu = tk.Menu(presets, tearoff=0)
+        for label, value in (("Par défaut (80, 443, 8000, 8080, 8443)", ",".join(map(str, netshot.DEFAULT_PORTS))),
+                             ("Web étendu (~100 ports)", "web"), ("Services non web (SSH, FTP, RDP, bases…)", "services"),
+                             ("Web étendu + services", "web,services")):
+            menu.add_command(label=label, command=lambda v=value: self.ports.set(v))
+        presets["menu"] = menu
+        presets.grid(row=2, column=2, padx=(8, 0), sticky="w")
         ttk.Label(main, text="Dossier de sortie :").grid(row=3, column=0, sticky="w")
         self.outdir = tk.StringVar(value=str(HERE / "screenshots"))
         ttk.Entry(main, textvariable=self.outdir).grid(row=3, column=1, sticky="ew", pady=2)
@@ -236,17 +247,34 @@ class NetshotApp:
         ttk.Combobox(opts2, textvariable=self.resolution, values=list(RESOLUTIONS), state="readonly",
                      width=20).pack(side="left", padx=(4, 16))
         self.enrich = tk.BooleanVar(value=True)
-        ttk.Checkbutton(opts2, text="Enrichir les IP (Shodan, LeakIX, KEV, EPSS)",
+        ttk.Checkbutton(opts2, text="Enrichir les IP et les versions (Shodan, LeakIX, NVD, KEV, EPSS)",
                         variable=self.enrich).pack(side="left", padx=(0, 16))
         self.tls_scan = tk.BooleanVar(value=True)
         ttk.Checkbutton(opts2, text="Analyser les certificats TLS", variable=self.tls_scan).pack(side="left")
         self.label_shots = tk.BooleanVar(value=True)
-        ttk.Checkbutton(opts2, text="Inscrire l'URL sur les captures", variable=self.label_shots).pack(
-            side="left", padx=(12, 0))
+        opts3 = ttk.Frame(main)
+        opts3.grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 8))
+        ttk.Checkbutton(opts3, text="Inscrire l'URL sur les captures", variable=self.label_shots).pack(side="left")
+        self.probe_dirs = tk.BooleanVar(value=False)
+        ttk.Checkbutton(opts3, text="Tester les dossiers courants (Index of)", variable=self.probe_dirs).pack(
+            side="left", padx=(16, 0))
+        self.probe_files = tk.BooleanVar(value=False)
+        ttk.Checkbutton(opts3, text="Tester les fichiers sensibles (.env, .git…)", variable=self.probe_files).pack(
+            side="left", padx=(16, 0))
+        opts4 = ttk.Frame(main)
+        opts4.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(0, 8))
+        ttk.Label(opts4, text="Proxy").pack(side="left")
+        self.proxy = tk.StringVar()
+        ttk.Entry(opts4, textvariable=self.proxy, width=26).pack(side="left", padx=(4, 4))
+        ttk.Label(opts4, text="ex. http://127.0.0.1:8080", foreground="#888").pack(side="left", padx=(0, 16))
+        ttk.Label(opts4, text="Hors périmètre").pack(side="left")
+        self.exclude = tk.StringVar()
+        ttk.Entry(opts4, textvariable=self.exclude).pack(side="left", fill="x", expand=True, padx=(4, 4))
+        ttk.Button(opts4, text="Fichier…", command=self.load_exclusions).pack(side="left")
 
         # User agents (right column). Nothing selected = Chromium's own UA.
         ua_box = ttk.LabelFrame(main, text="User agents (une capture par UA)", padding=6)
-        ua_box.grid(row=0, column=3, rowspan=6, sticky="nsew", padx=(12, 0))
+        ua_box.grid(row=0, column=3, rowspan=8, sticky="nsew", padx=(12, 0))
         ua_box.rowconfigure(0, weight=1)
         ua_box.columnconfigure(0, weight=1)
         self.ua_names = list(netshot.USER_AGENTS)
@@ -265,7 +293,7 @@ class NetshotApp:
         ttk.Entry(ua_box, textvariable=self.custom_ua).grid(row=3, column=0, columnspan=4, sticky="ew")
 
         actions = ttk.Frame(main)
-        actions.grid(row=6, column=0, columnspan=4, sticky="ew")
+        actions.grid(row=8, column=0, columnspan=4, sticky="ew")
         self.start_btn = SoftButton(actions, text="Lancer le scan", command=self.start)
         self.start_btn.pack(side="left")
         self.stop_btn = SoftButton(actions, "danger", text="Arrêter", command=self.stop, state="disabled")
@@ -275,9 +303,9 @@ class NetshotApp:
         self.folder_btn = ttk.Button(actions, text="Ouvrir le dossier", command=self.open_folder, state="disabled")
         self.folder_btn.pack(side="right", padx=8)
         self.progress = ttk.Progressbar(main, mode="determinate")
-        self.progress.grid(row=7, column=0, columnspan=4, sticky="ew", pady=(10, 2))
+        self.progress.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(10, 2))
         self.status = tk.StringVar(value="Prêt. Aucun UA sélectionné = UA du navigateur.")
-        ttk.Label(main, textvariable=self.status).grid(row=8, column=0, columnspan=4, sticky="w")
+        ttk.Label(main, textvariable=self.status).grid(row=10, column=0, columnspan=4, sticky="w")
         return main
 
     def _build_subs_tab(self):
@@ -1111,6 +1139,21 @@ class NetshotApp:
 
     # --- Scan -------------------------------------------------------------
 
+    def load_exclusions(self):
+        path = filedialog.askopenfilename(title="Cibles hors périmètre (une par ligne)",
+                                          filetypes=[("Texte", "*.txt *.csv"), ("Tous", "*.*")])
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8-sig", errors="replace") as fh:
+                items = [l.split("#", 1)[0].strip() for l in fh.read().splitlines()]
+        except OSError as exc:
+            messagebox.showerror("NetShot", str(exc))
+            return
+        current = self.exclude.get().strip()
+        self.exclude.set(", ".join(x for x in [current] + items if x))
+        self.write_log(f"[exclusion] {sum(1 for x in items if x)} entrée(s) chargée(s) depuis {path}")
+
     def start(self):
         if netshot.async_playwright is None:
             messagebox.showerror("NetShot", netshot.PLAYWRIGHT_MISSING.replace(": ", " :\n", 1))
@@ -1131,6 +1174,12 @@ class NetshotApp:
         if not ports:
             messagebox.showerror("NetShot", "Aucun port valide.")
             return
+        try:
+            proxy = parse_proxy(self.proxy.get())
+        except ValueError as exc:
+            messagebox.showerror("NetShot", f"Proxy invalide : {exc}")
+            return
+        exclusions = read_exclusions([self.exclude.get()])
 
         if any(sources.ASN_RE.match(i.split("#", 1)[0].strip()) for i in items):
             self.status.set("Lecture des plages des AS (RIPEstat)…")
@@ -1152,7 +1201,10 @@ class NetshotApp:
         args = SimpleNamespace(output=output, concurrency=concurrency, connect_timeout=connect_timeout,
                                page_timeout=page_timeout, delay=delay, user_agents=user_agents,
                                width=width, height=height, enrich=self.enrich.get(), keys=dict(self.keys),
-                               tls=self.tls_scan.get(), label=self.label_shots.get())
+                               tls=self.tls_scan.get(), label=self.label_shots.get(),
+                               dirs=dir_words() if self.probe_dirs.get() else None,
+                               proxy=proxy, exclusions=exclusions,
+                               files=file_rules() if self.probe_files.get() else None)
         self.report = output / "report.html"
 
         self.stop_event.clear()

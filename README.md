@@ -25,7 +25,7 @@ netshot/
 │   ├── enrich.py         enrichissement des IP (DNS inverse, InternetDB, LeakIX, KEV, EPSS)
 │   ├── theme.py          thème clair / sombre de l'interface
 │   └── leakcheck.py      fuites de données (LeakCheck Pro API v2), onglet Leaks
-├── assets/               icon.png, subdomains.txt (dictionnaire DNS)
+├── assets/               icon.png, subdomains.txt (dictionnaire DNS), dirs.txt (dossiers courants), files.txt (fichiers sensibles)
 ├── examples/             targets.example.txt
 └── screenshots/          sorties de l'interface graphique
 ```
@@ -202,6 +202,50 @@ confiance vérifiée avec le magasin Windows, ALPN et HSTS. Résultats : `certif
 Limite de la version Python : avec un serveur uniquement TLS 1.3, la chaîne se limite au certificat
 du serveur (Python 3.10 ne donne pas les intermédiaires).
 
+### 🕳️ Reconnaissance approfondie
+
+| Analyse | Requêtes en plus | Ce qui est relevé |
+|---|---|---|
+| **Fichiers sensibles** (`--files`, désactivé par défaut) | ~65 par service web | `.env`, `.git/HEAD`, `.svn`, `.DS_Store`, `.htpasswd`, `web.config.bak`, `wp-config.php.bak`, clés SSH, sauvegardes `.zip` / `.sql`, `phpinfo`, `server-status`, Spring `actuator/env`, `elmah.axd`, Swagger… Chaque réponse doit contenir la signature du fichier : une page 404 personnalisée ne donne pas de faux positif. Seuls les 64 premiers Ko sont lus. Liste modifiable : `assets/files.txt` (chemin, gravité, signature) ou `--files-wordlist fichier` |
+| **JavaScript** | aucune | scripts du site chargés par la page et scripts en ligne : chemins d'API (`/api/…`, `/internal/…`), URL internes (IP privées, `.local`, `.corp`…), secrets (clés AWS, Google, Slack, GitHub, Stripe, JWT, chaînes de connexion, `client_secret`…). Les secrets sont **masqués** partout (`AKIA…MPLE`) avec le fichier et la ligne pour vérifier |
+| **robots.txt, sitemap.xml, security.txt** | 3 par service web | chemins que le site demande de ne pas indexer (liens cliquables), nombre d'URL du sitemap, contacts sécurité |
+| **Prise de contrôle de sous-domaine** | DNS seulement | nom dont le CNAME pointe vers un service cloud qui n'existe plus (S3, Azure, GitHub Pages, Heroku, Shopify, Fastly… : NXDOMAIN ou page « ressource inexistante ») |
+| **Services non web** | 1 ou 2 connexions par port ouvert sans page web | bannière (SSH, FTP, SMTP, POP, IMAP, MySQL / MariaDB, Redis, VNC, Telnet, RDP) ; la version part dans les technologies, donc dans la recherche de CVE |
+| **Identifiants par défaut** | aucune | rappel des identifiants par défaut connus de chaque techno trouvée (Tomcat, Grafana, RabbitMQ, NetScaler, BIG-IP…). **Rien n'est essayé** : c'est une liste à vérifier à la main, dans le cadre autorisé |
+
+Les sections correspondantes sont en tête du rapport, et dans les onglets de `results.xlsx`.
+Seuls les fichiers sensibles sont désactivés par défaut. Le reste se coupe avec `--no-analyze`.
+
+**Préréglages de ports** : `-p web` (une centaine de ports web : 81, 3000, 5000, 8081, 8888, 9090,
+10000…), `-p services` (SSH, FTP, Telnet, SMTP, POP, IMAP, LDAP, bases de données, RDP, VNC, Redis,
+MongoDB…), mélangeables : `-p web,services,8443`. Dans l'interface : bouton **Préréglages ▾** à côté
+des ports.
+
+```bash
+python netshot.py 10.0.0.0/24 -p web,services --files
+```
+
+### 🎯 Périmètre et proxy
+
+**Hors périmètre** : les cibles exclues par contrat ne sont jamais testées. IP, plage CIDR, nom
+d'hôte ou `*.domaine` (tous les sous-domaines). Un nom qui pointe vers une plage exclue est exclu
+aussi. Les cibles retirées sont listées dans le journal.
+
+```bash
+python netshot.py 10.0.0.0/16 --exclude "10.0.5.0/24, prod-db.exemple.fr, *.partenaire.fr"
+python netshot.py -f cibles.txt --exclude-file hors_perimetre.txt
+```
+
+**Proxy** : `--proxy http://127.0.0.1:8080` (Burp, ZAP : tout le trafic web est tracé) ou
+`--proxy socks5://hôte:1080` (rebond). Les pages, favicons et dossiers (`--dirs`) passent par le
+proxy. Le test des ports passe par le proxy SOCKS5 ; avec un proxy HTTP il reste direct (la réponse
+d'un proxy HTTP ne dit rien de l'état du port). L'analyse TLS, l'enrichissement et NVD restent
+directs. Proxy HTTP avec mot de passe : `http://user:motdepasse@hôte:port` ; Chromium n'accepte pas
+de mot de passe en SOCKS5.
+
+Dans l'interface : champs « Proxy » et « Hors périmètre » (bouton **Fichier…** pour charger une
+liste) sous les options du Scan.
+
 ### 🛰️ Enrichissement des IP
 
 Après le scan : DNS inverse, Shodan (avec clé : organisation, ASN, pays, OS, service par port avec
@@ -209,6 +253,36 @@ version et titre, CVE ; sans clé : InternetDB gratuit avec ports, CPE et CVE), 
 CISA KEV (CVE exploitées, en rouge) et EPSS (tri). Seules les IP **publiques** sont envoyées à
 Shodan et LeakIX. Résultat : tableau « Exposition » en tête du rapport, ligne de synthèse sous chaque
 service, et `exposure.csv`. Désactivable avec `--no-enrich` ou la case de l'interface.
+
+### 🔬 Analyse des pages
+
+Pendant la capture, NetShot lit ce que chaque page révèle, sans scan supplémentaire (seule requête en
+plus : le favicon). Désactivable avec `--no-analyze`.
+
+| Analyse | Ce qui est relevé |
+|---|---|
+| **Technologies** | serveur, langage, CMS, framework, équipement (FortiGate, NetScaler, BIG-IP…) et version, lus dans les en-têtes (`Server`, `X-Powered-By`…), les cookies, la balise `generator`, les scripts et le HTML. Avec l'enrichissement, les CVE de chaque version sont cherchées dans **NVD** puis classées avec CISA KEV et EPSS. Seuls le produit et la version partent vers NVD, jamais une adresse. Sans clé NVD : ~7 s par version ; avec la clé gratuite `nvd` : moins d'une seconde |
+| **Pages sensibles** | `index-of` (liste de fichiers : « Index of / », « Directory listing for », IIS), `debug` (trace d'erreur, debug Django / Werkzeug, phpinfo), `default` (page par défaut Apache, IIS, nginx, Tomcat…), `admin` (interface d'administration), `login` (champ mot de passe), `auth-http` (401) |
+| **Favicon** | hash MurmurHash3 identique au filtre Shodan `http.favicon.hash`, avec un lien de recherche Shodan |
+| **Pages similaires** | hash perceptuel de chaque capture : les pages identiques sont regroupées et une case du rapport masque les doublons |
+| **En-têtes de sécurité** | HSTS, CSP, anti-clickjacking, `nosniff`, `Referrer-Policy` absents, version divulguée, cookies sans `Secure` / `HttpOnly` / `SameSite`, mot de passe saisi en HTTP clair |
+
+Les versions lues dans les en-têtes sont indicatives : un serveur peut masquer ou mentir sur sa
+version, et une distribution peut corriger une faille sans changer le numéro (rétroportage).
+
+**Dossiers courants** (option, désactivée par défaut) : sur chaque service web trouvé, NetShot teste
+les ~95 dossiers de `assets/dirs.txt` (`backup/`, `uploads/`, `logs/`, `.git/`…) avec une requête
+légère chacun, et capture ceux qui affichent une liste de fichiers (tag `index-of`). Comme le
+dictionnaire DNS, la liste se modifie ou se remplace par `--dirs-wordlist fichier` (un chemin par
+ligne). C'est une démarche **active** : ~95 requêtes de plus par service, soumises à `--delay`.
+
+```bash
+python netshot.py 10.0.0.0/24 --dirs
+python netshot.py -f cibles.txt --dirs-wordlist mes_dossiers.txt
+```
+
+Dans l'interface : case « Tester les dossiers courants (Index of) ». Une page sensible n'est jamais
+masquée par la case « masquer les doublons visuels ».
 
 ## 🖥️ Interface graphique
 
@@ -238,8 +312,10 @@ Dans l'ordre du déroulé d'une reconnaissance :
 - **Cibles** : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou chargement d'un fichier texte ou CSV.
 - **Options** : ports, dossier de sortie, nombre de tests en parallèle, timeouts, délai entre deux captures,
   résolution (1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile).
-- **Cases** : « Enrichir les IP » (Shodan, LeakIX, KEV, EPSS), « Analyser les certificats TLS »,
-  « Inscrire l'URL sur les captures » (bandeau hôte:port, URL, statut et date en bas de chaque image).
+- **Cases** : « Enrichir les IP et les versions » (Shodan, LeakIX, NVD, KEV, EPSS), « Analyser les certificats TLS »,
+  « Inscrire l'URL sur les captures » (bandeau hôte:port, URL, statut et date en bas de chaque image),
+  « Tester les dossiers courants (Index of) » et « Tester les fichiers sensibles (.env, .git…) »
+  (désactivées par défaut).
 - **User agents** : sélection rapide Navig. / Bots / Tous / Aucun, ou UA personnalisé.
 - **Pendant le scan** : barre de progression, boutons Arrêter, Ouvrir le dossier, Ouvrir le rapport.
 - **Dernière capture** : aperçu affiché à côté du journal ; clic pour l'ouvrir en grand, **Effacer** pour le vider
@@ -260,7 +336,7 @@ Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par d
 | Option | Rôle | Défaut |
 |---|---|---|
 | `-f FILE` | fichier de cibles : liste ou export CSV (répétable) | - |
-| `-p PORTS` | ports, ex. `80,443,8000-8010` | `80,443,8000,8080,8443` |
+| `-p PORTS` | ports, ex. `80,443,8000-8010`, ou préréglages `web`, `services`, `default` (mélangeables) | `80,443,8000,8080,8443` |
 | `-o DIR` | dossier de sortie | `screenshots_<date>` |
 | `-c N` | tests en parallèle | `10` |
 | `--connect-timeout` | délai TCP (s) | `1.5` |
@@ -273,7 +349,15 @@ Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par d
 | `--key SOURCE=CLÉ` | clé API d'un service (répétable) | fichier de clés |
 | `--save-keys` | enregistre les `--key` | - |
 | `--list-sources` | liste les sources et les clés configurées | - |
-| `--no-enrich` | désactive l'enrichissement des IP | enrichissement actif |
+| `--no-enrich` | désactive l'enrichissement des IP et la recherche des CVE dans NVD | enrichissement actif |
+| `--no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires) | analyse active |
+| `--exclude CIBLES` | cibles hors périmètre : IP, CIDR, nom ou `*.domaine`, séparées par des virgules (répétable) | - |
+| `--exclude-file FILE` | fichier de cibles hors périmètre, une par ligne (répétable) | - |
+| `--proxy URL` | proxy des pages : `http://hôte:port` ou `socks5://hôte:port` | aucun |
+| `--files` | teste les fichiers sensibles de `assets/files.txt` (signature vérifiée) | non |
+| `--files-wordlist FILE` | liste de fichiers à la place de `assets/files.txt` (active `--files`) | - |
+| `--dirs` | teste les dossiers de `assets/dirs.txt` et capture les listes de fichiers trouvées | non |
+| `--dirs-wordlist FILE` | liste de dossiers à tester à la place de `assets/dirs.txt` (active `--dirs`) | - |
 | `--no-label` | n'inscrit pas hôte:port, URL, code HTTP et date en bas des captures | bandeau inscrit |
 | `--dns DOMAINE` | enregistrements DNS du domaine (comme dig) puis quitte | - |
 | `--dns-server` | serveur DNS pour `--dns` | résolveurs du système |
@@ -290,8 +374,19 @@ Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par d
 Le dossier de sortie contient :
 
 - un PNG par service et par user agent : `<hôte>_<port>_<http|https>[_<ua>].png` ;
-- `report.html` : captures groupées par `hôte:port`, avec les différences entre UA signalées ;
-- `results.csv` : host, port, ua, url, status, title, final_url, size, file, error ;
+- `report.html` : captures groupées par `hôte:port`, avec les différences entre UA signalées, et une
+  barre de filtres qui reste en haut de l'écran : recherche (URL, titre, techno, tag), code HTTP,
+  repère et technologie ;
+- `results.csv` : host, port, ua, url, status, title, final_url, size, file, error, tags, tech,
+  favicon_hash, header_issues, visual_group ;
+- `technologies.csv` : technologies et versions trouvées, URL concernées, CVE, KEV, EPSS et CVSS max ;
+- `results.xlsx` : un onglet par thème (Services, Pages sensibles, Technologies, En-têtes, Fichiers
+  exposés, JavaScript, Takeover, Services non web, robots et sitemap, Exposition),
+  avec filtres et en-tête figé, prêt pour un suivi des écarts ;
+- `results.json` : tout le scan (services, technologies, exposition, TLS, pages similaires) pour un
+  autre outil ;
+- en tête du rapport : « Pages sensibles », « Technologies détectées », « En-têtes de sécurité »
+  et « Pages similaires » ;
 - avec l'enrichissement : tableau « Exposition » en tête du rapport et `exposure.csv`.
 
 Le cache HTTP est désactivé pour que chaque UA reçoive une réponse fraîche. Quand un service
