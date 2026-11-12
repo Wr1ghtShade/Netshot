@@ -1,0 +1,21 @@
+# Secrets and local settings: never commit
+keys.json
+keys.json.bak
+keys.json.tmp
+settings.json
+
+# Scan output
+screenshots/
+screenshots_*/
+certificats_*.csv
+fuites_*.csv
+
+# Python
+__pycache__/
+.venv/
+
+# Launchers written by install.ps1 / install.sh
+netshot.cmd
+netshot_gui.cmd
+netshot.sh
+netshot_gui.sh

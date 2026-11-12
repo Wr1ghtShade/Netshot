@@ -1,0 +1,7 @@
+# Keep shell scripts in LF (bash fails on CRLF) and PowerShell scripts in CRLF, whatever core.autocrlf says
+* text=auto
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.ico binary
+*.syso binary

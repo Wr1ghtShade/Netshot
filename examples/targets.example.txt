@@ -1,0 +1,6 @@
+# One target per line: IP, CIDR subnet or hostname.
+# Lines starting with '#' are ignored.
+192.168.1.10
+192.168.1.0/24
+10.0.0.0/28
+intranet.local
