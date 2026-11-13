@@ -60,6 +60,8 @@ from .webinfo import (TAGS, WEB_CSS, card_extras, detect_tech, dir_words, probe_
                       sensitive_section, tech_inventory, tech_label, tech_section, write_tech_csv)
 from .enrich import vuln_badges
 from .export import build_sheets, write_json, write_xlsx
+from .pagecheck import PAGE_RESOURCES_JS, analyze_resources, detect_waf, page_checks_section, page_issues, probe_waf
+from .reputation import check_reputation, reputation_section, write_reputation_csv
 from .recon import (DEFAULT_CREDS, PORT_PRESETS, RECON_CSS, ScriptCollector, analyze_js, banner_display,
                     banners_section, check_takeover, file_rules, files_section, grab_banner, js_section,
                     parse_banner, probe_files, takeover_section, well_known, wellknown_section)
@@ -290,7 +292,13 @@ async def capture(context, url, out_file, page_timeout, label=None, web=None):
                 headers = []
             tech = detect_tech(headers, content, title)
             info.update(tech=tech, tags=page_tags(title, content, final_url, status, headers, tech),
-                        header_issues=header_issues(final_url, headers, content))
+                        header_issues=header_issues(final_url, headers, content), waf=detect_waf(headers))
+            try:
+                pc = analyze_resources(final_url, await page.evaluate(PAGE_RESOURCES_JS))
+                info.update(pc)
+                info["header_issues"] = info["header_issues"] + page_issues(pc)
+            except Exception:
+                pass  # page navigated away: no resource check
             info["favicon_url"], info["favicon_hash"] = await fetch_favicon(page, context, page_timeout,
                                                                              web["favicons"])
             info["js"] = analyze_js(await scripts.sources(final_url, content))
@@ -368,6 +376,8 @@ async def process(host, port, args, contexts, sem, results, counter, log, stop, 
                         extra += "  [" + ", ".join(info["tags"]) + "]"
                     if info.get("tech"):
                         extra += "  " + ", ".join(tech_label(t) for t in info["tech"][:4])
+                    if info.get("waf"):
+                        extra += "  WAF " + ", ".join(info["waf"])
                     log(f"[+] {url}  {info['status']}  {info['title'][:60]}{tag}{extra}")
                     if on_shot:
                         on_shot(str(out_file), url, info["status"], info["title"], ua_name)
@@ -388,6 +398,11 @@ async def process(host, port, args, contexts, sem, results, counter, log, stop, 
             first_row["well_known"] = await well_known(contexts[0][1], base_url, args.page_timeout)
             if first_row["well_known"].get("robots"):
                 log(f"[robots] {base_url}robots.txt : {len(first_row['well_known']['robots'])} chemin(s)")
+        if first_row and getattr(args, "waf_probe", False) and not (stop and stop.is_set()):
+            await limiter.wait(stop)
+            first_row["waf_probe"] = await probe_waf(contexts[0][1], base_url, args.page_timeout)
+            if first_row["waf_probe"]:
+                log(f"[waf] {base_url}  {first_row['waf_probe']}")
         if first_row and getattr(args, "files", None) and not (stop and stop.is_set()):
             found = await probe_files(contexts[0][1], base_url, args.files, args.page_timeout, limiter, stop)
             first_row["files_found"] = found
@@ -509,12 +524,13 @@ def filter_bar(results, inventory):
 
 
 def write_reports(results, outdir, exposures=None, tls_results=None, inventory=None, visual_groups=None,
-                  takeovers=None):
+                  takeovers=None, reputation=None):
     results.sort(key=lambda r: (r["host"], r["port"]))
     with open(outdir / "results.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=["host", "port", "ua", "url", "status", "title", "final_url",
                                            "size", "file", "error", "tags", "tech", "favicon_hash",
-                                           "header_issues", "visual_group"])
+                                           "header_issues", "visual_group", "waf", "waf_probe", "mixed_content",
+                                           "no_sri", "trackers", "third_party_hosts"])
         w.writeheader()
         for r in results:
             row = {k: r.get(k, "") for k in w.fieldnames}
@@ -522,6 +538,9 @@ def write_reports(results, outdir, exposures=None, tls_results=None, inventory=N
             row["tech"] = "; ".join(tech_label(t) for t in r.get("tech") or [])
             row["header_issues"] = "; ".join(r.get("header_issues") or [])
             row["visual_group"] = r.get("group") or ""
+            for k, sep in (("waf", "; "), ("mixed_content", " "), ("no_sri", " "), ("trackers", "; "),
+                           ("third_party_hosts", " ")):
+                row[k] = sep.join(r.get(k) or [])
             w.writerow(row)
     firsts = {id(g[0]) for g in visual_groups or []}
     for r in results:
@@ -608,6 +627,7 @@ h1.brand{{display:flex;align-items:center;gap:10px;margin:0 0 4px}}
 h1.brand img{{width:36px;height:36px}}
 </style></head><body>
 <h1 class="brand">{f'<img src="{logo}" alt="">' if logo else ""}NetShot</h1><p>v{__version__} - {len(groups)} services, {len(results)} captures - {datetime.now():%Y-%m-%d %H:%M}</p>
+{reputation_section(reputation or [])}
 {takeover_section(takeovers or [])}
 {files_section(results)}
 {sensitive_section(results)}
@@ -618,6 +638,7 @@ h1.brand img{{width:36px;height:36px}}
 {exposure_table(exposures or [])}
 {tls_section(tls_results or [])}
 {headers_section(results)}
+{page_checks_section(results)}
 {groups_section(visual_groups or [])}
 {filter_bar(results, inventory)}
 {filter_box}
@@ -698,6 +719,11 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
     if getattr(args, "enrich", False) and results and not (stop and stop.is_set()):
         exposures = await asyncio.to_thread(enrich, results, getattr(args, "keys", None) or {}, log)
         write_exposure_csv(exposures, args.output)
+    reputation = None
+    if getattr(args, "enrich", False) and results and not (stop and stop.is_set()):
+        reputation = await asyncio.to_thread(check_reputation, results, exposures,
+                                             getattr(args, "keys", None) or {}, log, stop)
+        write_reputation_csv(reputation, args.output / "reputation.csv")
     tls_results = None
     if getattr(args, "tls", False) and results and not (stop and stop.is_set()):
         targets = tls_targets_from_results(results)
@@ -729,10 +755,10 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             await asyncio.to_thread(lookup_tech_cves, inventory, getattr(args, "keys", None) or {}, log, stop)
         write_tech_csv(inventory, args.output / "technologies.csv")
     takeovers = getattr(args, "takeovers", None) or []
-    write_reports(results, args.output, exposures, tls_results, inventory, groups, takeovers)
-    write_json(args.output / "results.json", results, exposures, tls_results, inventory, groups, takeovers)
+    write_reports(results, args.output, exposures, tls_results, inventory, groups, takeovers, reputation)
+    write_json(args.output / "results.json", results, exposures, tls_results, inventory, groups, takeovers, reputation)
     try:
-        write_xlsx(args.output / "results.xlsx", build_sheets(results, exposures, inventory, takeovers))
+        write_xlsx(args.output / "results.xlsx", build_sheets(results, exposures, inventory, takeovers, reputation))
     except OSError as exc:
         log(f"[export] results.xlsx : {exc}")
     ok = sum(1 for r in results if r["file"])
@@ -776,8 +802,9 @@ def main():
     ap.add_argument("--no-label", action="store_true",
                     help="do not write host:port, URL, status and date at the bottom of the screenshots")
     ap.add_argument("--no-enrich", action="store_true",
-                    help="do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS) "
-                         "nor look up the CVEs of the versions found (NVD)")
+                    help="do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS), look up the "
+                         "CVEs of the versions found (NVD) nor check the reputation of the host names (block "
+                         "lists, URLhaus, VirusTotal, Safe Browsing)")
     ap.add_argument("--no-analyze", action="store_true",
                     help="do not analyse the pages (technologies, sensitive pages, security headers, "
                          "favicon hash, similar pages)")
@@ -803,6 +830,9 @@ def main():
                          "actuator...) on every web service; each answer is checked against a signature")
     ap.add_argument("--files-wordlist", metavar="FILE",
                     help="file list for --files: path<TAB>severity<TAB>regex per line (implies --files)")
+    ap.add_argument("--waf-probe", action="store_true",
+                    help="send one request with a harmless attack-like string (XSS / SQL / ../) per web service "
+                         "to see whether a WAF blocks it; active test")
     ap.add_argument("--dirs", action="store_true",
                     help="test the common folders of assets/dirs.txt (or --dirs-wordlist) on every web "
                          "service and capture the directory listings found ('Index of'); extra requests")
@@ -870,6 +900,8 @@ def main():
             print(f"  {s['name']:<15} {state:<32} {s['help']}{' [default]' if s['default'] else ''}")
         print("\nEnrichment of the IPs found: Shodan host API (with key, else the free InternetDB), LeakIX (key), "
               "CISA KEV, FIRST EPSS.")
+        print("Reputation of the public host names: filtering DNS resolvers (Quad9, Cloudflare, OpenDNS, AdGuard), "
+              "URLhaus (key abusech), VirusTotal (key), Google Safe Browsing (key safebrowsing).")
         print("Targets: AS<number> expands to the prefixes announced by the AS (RIPEstat).")
         print(f"Keys file: {keys_path()}")
         return

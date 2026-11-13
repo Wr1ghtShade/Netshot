@@ -3,6 +3,94 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.0] - 2026-11-13
+
+Ajout des contrôles de [web-check](https://web-check.xyz/checks) qui manquaient à NetShot, sans passer
+par l'API web-check (encore en développement) : tout est fait localement ou auprès des sources
+d'origine. Même fonctionnement que la version Go 1.2.0.
+
+### Ajouté
+
+**Contenu mixte et SRI** (analyse des pages, active par défaut)
+- Liste des ressources (`script`, `link`, `img`, `iframe`, `audio`, `video`, `source`, `embed`,
+  `track`, `object`) et des formulaires en `http://` sur une page HTTPS, lue dans le DOM de la page
+  déjà chargée. Aucune requête de plus.
+- Liste des scripts et feuilles de style d'un autre site chargés sans attribut `integrity` (SRI).
+- Les deux constats s'ajoutent aux « Constats en-têtes » (`contenu mixte : N ressource(s)…`,
+  `SRI absent : N script(s)…`).
+
+**Traqueurs et tiers** (analyse des pages, active par défaut)
+- Environ 80 domaines connus classés par catégorie : mesure d'audience, publicité, réseaux sociaux,
+  analyse comportementale, gestionnaire de balises, consentement, polices (Google Fonts), vidéo,
+  chat, monitoring, anti-robot.
+- Liste des hôtes tiers appelés par la page (balises du DOM et Resource Timing), 100 au plus.
+
+**WAF / CDN de protection**
+- Détection passive dans les en-têtes et les cookies de chaque page : Cloudflare, Akamai, Imperva /
+  Incapsula, Sucuri, F5 BIG-IP ASM, AWS WAF, AWS CloudFront, Azure Front Door, Azure Application
+  Gateway, FortiWeb, Barracuda, Citrix NetScaler AppFirewall, ModSecurity, Fastly, DDoS-Guard,
+  Wallarm, Reblaze, Radware. Le WAF trouvé s'affiche dans le journal (`WAF …`).
+- `--waf-probe` (désactivé par défaut, test **actif**) : une requête normale puis une requête avec une
+  chaîne inoffensive qui ressemble à une attaque (`<script>`, `' OR '1'='1`, `../`) dans le paramètre
+  `netshot_waf_test`. Un code 400 / 403 / 406 / 418 / 429 / 501 / 503 / 999 différent de la page
+  normale, ou une page de blocage reconnue (Cloudflare, Imperva, Akamai, AWS, F5, ModSecurity,
+  Sucuri, FortiWeb, Barracuda, NetScaler, Wordfence, NAXSI, Wallarm, DDoS-Guard), donne
+  `bloqué (403 au lieu de 200) : <produit>`. Respecte `-d` / `--delay` et le proxy.
+- Interface : case « Tester la présence d'un WAF (requête de test) ».
+
+**Réputation des noms** (avec l'enrichissement, `--no-enrich` la coupe)
+- Résolveurs DNS filtrants, sans clé : Quad9 (malware / phishing), Cloudflare 1.1.1.2 (malware),
+  OpenDNS (phishing), AdGuard DNS (publicité / traqueurs). Un nom qui résout chez 1.1.1.1 (ou
+  9.9.9.10) mais que le résolveur filtrant bloque (NXDOMAIN, `0.0.0.0`, `127.0.0.1`, IP de page de
+  blocage) est signalé. Si le port 53 sortant est filtré, le journal le dit.
+- URLhaus (abuse.ch), nouvelle clé gratuite `abusech` : URL malveillantes connues sur le nom, nombre
+  encore en ligne, type de menace, présence dans Spamhaus DBL et SURBL.
+- VirusTotal (clé `virustotal` existante) : moteurs qui classent le domaine malveillant ou suspect.
+  Limité aux 8 premiers noms, une requête toutes les 15 s (API gratuite : 4 / minute).
+- Google Safe Browsing, nouvelle clé gratuite `safebrowsing` : malware, hameçonnage, logiciel
+  indésirable sur les URL capturées (une seule requête pour 500 URL).
+- Seuls les noms publics partent : un nom qui pointe vers une IP interne n'est jamais envoyé.
+- Niveau par nom : critique, haute, moyenne, info (voir README).
+
+**DKIM** (`--dns` et onglet DNS)
+- 32 sélecteurs courants interrogés (`google`, `selector1`, `selector2`, `k1`, `s1`, `mailjet`,
+  `brevo1`, `protonmail`, `fm1`…), y compris via le CNAME de Microsoft 365.
+- Nouveaux constats : `✓ DKIM publié (sélecteur(s) : …)`, `DKIM non trouvé parmi 32 sélecteurs
+  courants` (seulement si le domaine a un MX ou un SPF), `Clé DKIM révoquée (p= vide)`.
+
+**Rapport et exports**
+- Rapport : section « Réputation » en tête, sections « WAF / CDN de protection », « Contenu mixte et
+  SRI » et « Traqueurs et tiers » après les en-têtes de sécurité.
+- `results.csv` : nouvelles colonnes `waf`, `waf_probe`, `mixed_content`, `no_sri`, `trackers`,
+  `third_party_hosts`.
+- `results.json` : nouveaux champs par service (`waf`, `waf_probe`, `mixed_content`, `no_sri`,
+  `trackers`, `third_party_hosts`) et nouvelle clé `reputation`.
+- `results.xlsx` : nouveaux onglets « WAF, SRI, traqueurs » et « Réputation ».
+- Nouveau fichier `reputation.csv`.
+
+### Modifié
+- `--no-enrich` coupe aussi la réputation des noms ; la case de l'interface s'appelle « Enrichir les
+  IP, les versions et la réputation ».
+- `--list-sources` décrit les sources de réputation.
+- `detect_tech` accepte un paramètre `rules` pour réutiliser le moteur de signatures avec les règles
+  WAF (listes compilées une fois, en cache).
+- Version 1.2.0.
+
+### Fichiers
+- Nouveaux : `core/pagecheck.py`, `core/reputation.py`.
+- Modifiés : `core/scan.py` (appel des contrôles et de la réputation, `--waf-probe`, colonnes CSV,
+  sections du rapport), `core/webinfo.py` (`detect_tech(rules=…)`), `core/dns.py` (DKIM),
+  `core/export.py`, `core/sources.py` (clés `abusech`, `safebrowsing`), `core/gui.py`,
+  `core/__init__.py`, `README.md`.
+
+### Tests
+- Mêmes cas que les tests Go : contenu mixte, SRI, traqueurs, WAF passif, DKIM (dont CNAME
+  Microsoft 365 et clé révoquée), niveaux de réputation.
+- Scan de bout en bout sur une page locale (HTTPS, Chromium headless) avec `--waf-probe` : mêmes
+  résultats que la version Go.
+- Non testé en conditions réelles : les appels à Quad9 / Cloudflare / OpenDNS / AdGuard, URLhaus,
+  VirusTotal et Safe Browsing (réseau de l'environnement de développement filtré).
+
 ## [1.1.0] - 2026-11-12
 
 ### Ajouté

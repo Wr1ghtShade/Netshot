@@ -24,7 +24,9 @@ netshot/
 │   ├── sources.py        clés API, sources passives de sous-domaines, plages d'AS, import CSV
 │   ├── enrich.py         enrichissement des IP (DNS inverse, InternetDB, LeakIX, KEV, EPSS)
 │   ├── theme.py          thème clair / sombre de l'interface
-│   └── leakcheck.py      fuites de données (LeakCheck Pro API v2), onglet Leaks
+│   ├── leakcheck.py      fuites de données (LeakCheck Pro API v2), onglet Leaks
+│   ├── pagecheck.py      contenu mixte, SRI, traqueurs, WAF (passif et --waf-probe)
+│   └── reputation.py     réputation des noms : résolveurs filtrants, URLhaus, VirusTotal, Safe Browsing
 ├── assets/               icon.png, subdomains.txt (dictionnaire DNS), dirs.txt (dossiers courants), files.txt (fichiers sensibles)
 ├── examples/             targets.example.txt
 └── screenshots/          sorties de l'interface graphique
@@ -144,6 +146,9 @@ python netshot.py --key domscan=XXXX --key leakix=YYYY --save-keys
 
 Une variable `NETSHOT_KEY_<SOURCE>` (ex. `NETSHOT_KEY_DOMSCAN`) remplace la clé du fichier.
 
+Services acceptant une clé : certspotter, hackertarget, urlscan, virustotal, dnsdumpster, domscan,
+viewdns, leakix, shodan, leakcheck, nvd, abusech (URLhaus), safebrowsing (Google Safe Browsing).
+
 ### 🌍 Plages d'un AS et import CSV
 
 - Une cible `AS1234` est remplacée par les plages IPv4 annoncées par l'AS (RIPEstat, sans clé).
@@ -165,8 +170,9 @@ python -m core.dns exemple.fr 1.1.1.1                  # le module seul
 
 Une requête ANY est tentée (souvent refusée, RFC 8482), puis chaque type est interrogé un par un :
 A, AAAA, CNAME, NS, SOA, MX, TXT, CAA, DS, DNSKEY, HTTPS, et les noms utiles (`www`, `_dmarc`,
-`_mta-sts`, `_smtp._tls`, BIMI, SRV Microsoft 365 et Active Directory). Constats : SPF, DMARC, CAA,
-DNSSEC, MTA-STS, AD visible. Les serveurs du système sont lus dans le registre Windows
+`_mta-sts`, `_smtp._tls`, BIMI, SRV Microsoft 365 et Active Directory, 32 sélecteurs DKIM courants).
+Constats : SPF, DMARC, DKIM (sélecteurs trouvés, clé révoquée), CAA, DNSSEC, MTA-STS, AD visible.
+Le sélecteur DKIM réel peut être un autre mot : « DKIM non trouvé » ne prouve pas son absence. Les serveurs du système sont lus dans le registre Windows
 (ou `/etc/resolv.conf`).
 
 ### 🪪 Whois d'un domaine, d'une IP ou d'un AS
@@ -254,6 +260,23 @@ CISA KEV (CVE exploitées, en rouge) et EPSS (tri). Seules les IP **publiques** 
 Shodan et LeakIX. Résultat : tableau « Exposition » en tête du rapport, ligne de synthèse sous chaque
 service, et `exposure.csv`. Désactivable avec `--no-enrich` ou la case de l'interface.
 
+### 🚦 Réputation des noms (listes de blocage, malware, phishing)
+
+Avec l'enrichissement, chaque nom d'hôte **public** scanné est vérifié (un nom qui pointe vers une IP
+interne n'est jamais envoyé) :
+
+| Source | Clé | Ce qui est relevé |
+|---|---|---|
+| **Résolveurs DNS filtrants** | aucune | Quad9 (malware, phishing), Cloudflare 1.1.1.2 (malware), OpenDNS (phishing), AdGuard DNS (publicité, traqueurs) : un nom qui résout normalement (1.1.1.1) mais que ces résolveurs bloquent (NXDOMAIN, `0.0.0.0`, page de blocage) est signalé. Le port 53 sortant doit être ouvert ; sinon le journal l'indique |
+| **URLhaus** (abuse.ch) | `abusech`, gratuite | URL malveillantes connues sur le nom (et combien sont encore en ligne), présence dans Spamhaus DBL et SURBL |
+| **VirusTotal** | `virustotal` (déjà utilisée pour les sous-domaines) | nombre de moteurs qui classent le domaine malveillant ou suspect. API gratuite : 4 requêtes / minute, donc limité aux 8 premiers noms |
+| **Google Safe Browsing** | `safebrowsing`, gratuite | malware, hameçonnage, logiciel indésirable, sur les URL capturées |
+
+Niveau : **critique** (Safe Browsing, URL URLhaus en ligne, au moins 3 moteurs VirusTotal), **haute**
+(bloqué par un résolveur de sécurité, connu d'URLhaus, 1 ou 2 moteurs), **moyenne** (seulement
+suspect pour VirusTotal), **info** (bloqué seulement par AdGuard, donc publicité ou traqueur).
+Section « Réputation » en tête du rapport, `reputation.csv`, onglet « Réputation » de `results.xlsx`.
+
 ### 🔬 Analyse des pages
 
 Pendant la capture, NetShot lit ce que chaque page révèle, sans scan supplémentaire (seule requête en
@@ -266,6 +289,9 @@ plus : le favicon). Désactivable avec `--no-analyze`.
 | **Favicon** | hash MurmurHash3 identique au filtre Shodan `http.favicon.hash`, avec un lien de recherche Shodan |
 | **Pages similaires** | hash perceptuel de chaque capture : les pages identiques sont regroupées et une case du rapport masque les doublons |
 | **En-têtes de sécurité** | HSTS, CSP, anti-clickjacking, `nosniff`, `Referrer-Policy` absents, version divulguée, cookies sans `Secure` / `HttpOnly` / `SameSite`, mot de passe saisi en HTTP clair |
+| **Contenu mixte et SRI** | ressources (scripts, styles, images, iframes…) et formulaires en `http://` sur une page HTTPS ; scripts et feuilles de style d'un autre site chargés sans attribut `integrity` (SRI). Lus dans la page déjà chargée, sans requête de plus |
+| **Traqueurs et tiers** | ~80 services connus : mesure d'audience (Google Analytics, Matomo Cloud, AT Internet…), publicité, pixels des réseaux sociaux, analyse comportementale (Hotjar, Clarity…), bannières de consentement, Google Fonts, chat, monitoring ; plus la liste des hôtes tiers appelés par la page. Utile pour un contrôle RGPD |
+| **WAF / CDN de protection** | Cloudflare, Akamai, Imperva, Sucuri, F5 ASM, AWS WAF / CloudFront, Azure Front Door / Application Gateway, FortiWeb, Barracuda, NetScaler AppFirewall, ModSecurity, Fastly, DDoS-Guard… lus dans les en-têtes et les cookies. Avec `--waf-probe` (désactivé par défaut, test **actif**, case « Tester la présence d'un WAF » dans l'interface) : une requête avec une chaîne d'attaque inoffensive dans l'URL, comparée à la page normale ; un code 403 / 406… ou une page de blocage confirme le filtrage et nomme souvent le produit |
 
 Les versions lues dans les en-têtes sont indicatives : un serveur peut masquer ou mentir sur sa
 version, et une distribution peut corriger une faille sans changer le numéro (rétroportage).
@@ -312,10 +338,11 @@ Dans l'ordre du déroulé d'une reconnaissance :
 - **Cibles** : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou chargement d'un fichier texte ou CSV.
 - **Options** : ports, dossier de sortie, nombre de tests en parallèle, timeouts, délai entre deux captures,
   résolution (1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile).
-- **Cases** : « Enrichir les IP et les versions » (Shodan, LeakIX, NVD, KEV, EPSS), « Analyser les certificats TLS »,
+- **Cases** : « Enrichir les IP, les versions et la réputation » (Shodan, LeakIX, NVD, KEV, EPSS, listes de
+  blocage), « Analyser les certificats TLS »,
   « Inscrire l'URL sur les captures » (bandeau hôte:port, URL, statut et date en bas de chaque image),
-  « Tester les dossiers courants (Index of) » et « Tester les fichiers sensibles (.env, .git…) »
-  (désactivées par défaut).
+  « Tester les dossiers courants (Index of) », « Tester les fichiers sensibles (.env, .git…) » et
+  « Tester la présence d'un WAF (requête de test) » (désactivées par défaut).
 - **User agents** : sélection rapide Navig. / Bots / Tous / Aucun, ou UA personnalisé.
 - **Pendant le scan** : barre de progression, boutons Arrêter, Ouvrir le dossier, Ouvrir le rapport.
 - **Dernière capture** : aperçu affiché à côté du journal ; clic pour l'ouvrir en grand, **Effacer** pour le vider
@@ -350,13 +377,14 @@ Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par d
 | `--key SOURCE=CLÉ` | clé API d'un service (répétable) | fichier de clés |
 | `--save-keys` | enregistre les `--key` | - |
 | `--list-sources` | liste les sources et les clés configurées | - |
-| `--no-enrich` | désactive l'enrichissement des IP et la recherche des CVE dans NVD | enrichissement actif |
+| `--no-enrich` | désactive l'enrichissement des IP, la recherche des CVE dans NVD et la réputation des noms | enrichissement actif |
 | `--no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires) | analyse active |
 | `--exclude CIBLES` | cibles hors périmètre : IP, CIDR, nom ou `*.domaine`, séparées par des virgules (répétable) | - |
 | `--exclude-file FILE` | fichier de cibles hors périmètre, une par ligne (répétable) | - |
 | `--proxy URL` | proxy des pages : `http://hôte:port` ou `socks5://hôte:port` | aucun |
 | `--files` | teste les fichiers sensibles de `assets/files.txt` (signature vérifiée) | non |
 | `--files-wordlist FILE` | liste de fichiers à la place de `assets/files.txt` (active `--files`) | - |
+| `--waf-probe` | une requête de test par service web (chaîne XSS / SQL / `../` inoffensive) pour voir si un WAF bloque | non |
 | `--dirs` | teste les dossiers de `assets/dirs.txt` et capture les listes de fichiers trouvées | non |
 | `--dirs-wordlist FILE` | liste de dossiers à tester à la place de `assets/dirs.txt` (active `--dirs`) | - |
 | `--no-label` | n'inscrit pas hôte:port, URL, code HTTP et date en bas des captures | bandeau inscrit |
@@ -379,16 +407,19 @@ Le dossier de sortie contient :
   barre de filtres qui reste en haut de l'écran : recherche (URL, titre, techno, tag), code HTTP,
   repère et technologie ;
 - `results.csv` : host, port, ua, url, status, title, final_url, size, file, error, tags, tech,
-  favicon_hash, header_issues, visual_group ;
+  favicon_hash, header_issues, visual_group, waf, waf_probe, mixed_content, no_sri, trackers,
+  third_party_hosts ;
 - `technologies.csv` : technologies et versions trouvées, URL concernées, CVE, KEV, EPSS et CVSS max ;
 - `results.xlsx` : un onglet par thème (Services, Pages sensibles, Technologies, En-têtes, Fichiers
-  exposés, JavaScript, Takeover, Services non web, robots et sitemap, Exposition),
+  exposés, JavaScript, Takeover, Services non web, robots et sitemap, Exposition, WAF / SRI /
+  traqueurs, Réputation),
   avec filtres et en-tête figé, prêt pour un suivi des écarts ;
 - `results.json` : tout le scan (services, technologies, exposition, TLS, pages similaires) pour un
   autre outil ;
-- en tête du rapport : « Pages sensibles », « Technologies détectées », « En-têtes de sécurité »
-  et « Pages similaires » ;
-- avec l'enrichissement : tableau « Exposition » en tête du rapport et `exposure.csv`.
+- en tête du rapport : « Réputation », « Pages sensibles », « Technologies détectées », « En-têtes de
+  sécurité », « WAF / CDN de protection », « Contenu mixte et SRI », « Traqueurs et tiers » et « Pages
+  similaires » ;
+- avec l'enrichissement : tableau « Exposition » en tête du rapport, `exposure.csv` et `reputation.csv`.
 
 Le cache HTTP est désactivé pour que chaque UA reçoive une réponse fraîche. Quand un service
 ne répond ni en http ni en https, l'erreur des deux essais est notée (`http: … | https: …`).

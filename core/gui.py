@@ -248,7 +248,8 @@ class NetshotApp:
         ttk.Combobox(opts2, textvariable=self.resolution, values=list(RESOLUTIONS), state="readonly",
                      width=20).pack(side="left", padx=(4, 16))
         self.enrich = tk.BooleanVar(value=True)
-        ttk.Checkbutton(opts2, text="Enrichir les IP et les versions (Shodan, LeakIX, NVD, KEV, EPSS)",
+        ttk.Checkbutton(opts2, text="Enrichir les IP, les versions et la réputation (Shodan, LeakIX, NVD, KEV, EPSS, "
+                                    "listes de blocage)",
                         variable=self.enrich).pack(side="left", padx=(0, 16))
         self.tls_scan = tk.BooleanVar(value=True)
         ttk.Checkbutton(opts2, text="Analyser les certificats TLS", variable=self.tls_scan).pack(side="left")
@@ -261,6 +262,9 @@ class NetshotApp:
             side="left", padx=(16, 0))
         self.probe_files = tk.BooleanVar(value=False)
         ttk.Checkbutton(opts3, text="Tester les fichiers sensibles (.env, .git…)", variable=self.probe_files).pack(
+            side="left", padx=(16, 0))
+        self.waf_probe = tk.BooleanVar(value=False)
+        ttk.Checkbutton(opts3, text="Tester la présence d'un WAF (requête de test)", variable=self.waf_probe).pack(
             side="left", padx=(16, 0))
         opts4 = ttk.Frame(main)
         opts4.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(0, 8))
@@ -1205,7 +1209,8 @@ class NetshotApp:
                                tls=self.tls_scan.get(), label=self.label_shots.get(),
                                dirs=dir_words() if self.probe_dirs.get() else None,
                                proxy=proxy, exclusions=exclusions,
-                               files=file_rules() if self.probe_files.get() else None)
+                               files=file_rules() if self.probe_files.get() else None,
+                               waf_probe=self.waf_probe.get())
         self.report = output / "report.html"
 
         self.stop_event.clear()

@@ -30,6 +30,14 @@ EXTRA_QUERIES = [
     ("_ldap._tcp", "SRV"), ("_kerberos._tcp", "SRV"), ("_ldap._tcp.dc._msdcs", "SRV"), ("_gc._tcp", "SRV"),
     ("_xmpp-server._tcp", "SRV"), ("_caldavs._tcp", "SRV"),
 ]
+# Common DKIM selectors (Google, Microsoft 365, Mailchimp, SendGrid, Mailjet, Brevo, Proton, Zoho,
+# Fastmail, Mailgun...). The real selector of a domain can be any word: none found here does not prove
+# there is no DKIM.
+DKIM_SELECTORS = ["google", "selector1", "selector2", "default", "dkim", "mail", "k1", "k2", "k3", "s1", "s2",
+                  "mandrill", "mxvault", "smtp", "mx", "everlytickey1", "everlytickey2", "zoho", "zmail", "protonmail",
+                  "protonmail2", "protonmail3", "key1", "sig1", "mailjet", "brevo1", "brevo2", "fm1", "fm2", "fm3",
+                  "krs", "cm"]
+EXTRA_QUERIES += [(f"{s}._domainkey", "TXT") for s in DKIM_SELECTORS]
 RCODES = {1: "FORMERR", 2: "SERVFAIL", 3: "NXDOMAIN", 4: "NOTIMP", 5: "REFUSED"}
 
 
@@ -323,6 +331,27 @@ def dns_lookup(domain, server=""):
     return rep
 
 
+def dkim_found(domain, recs):
+    """-> (selectors publishing a DKIM key, selectors whose key is revoked: empty p=)."""
+    suffix = "._domainkey." + domain
+    # a CNAME selector1._domainkey.domain -> ...onmicrosoft.com: the TXT record carries the target name
+    alias = {r["data"].lower().rstrip("."): r["name"].lower()[:-len(suffix)] for r in recs
+             if r["type"] == "CNAME" and r["name"].lower().endswith(suffix)}
+    found, revoked = [], []
+    for r in recs:
+        if r["type"] != "TXT":
+            continue
+        name = r["name"].lower()
+        sel = name[:-len(suffix)] if name.endswith(suffix) else alias.get(name, "")
+        data = r["data"].replace('"', "").replace(" ", "").lower()
+        if not sel or not ("v=dkim1" in data or "p=" in data):
+            continue
+        target = revoked if ("p=;" in data or data.endswith("p=")) else found
+        if sel not in target:
+            target.append(sel)
+    return sorted(found), sorted(revoked)
+
+
 def dns_findings(domain, recs):
     """Mail, certificate and DNSSEC posture read from the records."""
     def txt(r):
@@ -354,6 +383,13 @@ def dns_findings(domain, recs):
             f.append(f"✓ DMARC p={p}")
         else:
             f.append(f"⚠ DMARC p={p} : surveillance seulement, aucun blocage")
+    dkim, revoked = dkim_found(domain, recs)
+    if dkim:
+        f.append(f"✓ DKIM publié (sélecteur(s) : {', '.join(dkim)})")
+    elif mx or spf:
+        f.append(f"DKIM non trouvé parmi {len(DKIM_SELECTORS)} sélecteurs courants (le sélecteur réel peut être un autre)")
+    if revoked:
+        f.append(f"Clé DKIM révoquée (p= vide) : {', '.join(revoked)}")
     f.append("✓ CAA présent : autorités de certification limitées" if has(domain, "CAA")
              else "Pas de CAA : toute autorité de certification peut émettre")
     f.append("✓ DNSSEC actif (DS publié)" if has(domain, "DS") else "DNSSEC absent (pas de DS)")

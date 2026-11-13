@@ -21,7 +21,8 @@ def _clean(r):
     return {k: v for k, v in r.items() if k not in _DROP}
 
 
-def write_json(path, results, exposures=None, tls_results=None, inventory=None, groups=None, takeovers=None):
+def write_json(path, results, exposures=None, tls_results=None, inventory=None, groups=None, takeovers=None,
+               reputation=None):
     data = {
         "netshot_version": __version__,
         "generated": datetime.now().isoformat(timespec="seconds"),
@@ -31,6 +32,7 @@ def write_json(path, results, exposures=None, tls_results=None, inventory=None, 
         "tls": tls_results or [],
         "similar_pages": [[r["url"] for r in g] for g in groups or []],
         "takeovers": takeovers or [],
+        "reputation": reputation or [],
     }
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(data, fh, ensure_ascii=False, indent=1, default=str)
@@ -129,7 +131,7 @@ def write_xlsx(path, sheets):
                    '</styleSheet>')
 
 
-def build_sheets(results, exposures=None, inventory=None, takeovers=None):
+def build_sheets(results, exposures=None, inventory=None, takeovers=None, reputation=None):
     services = [[r.get("host", ""), r.get("port", ""), r.get("ua", ""), r.get("url", ""),
                  r.get("status", ""), r.get("title", ""), r.get("final_url", ""),
                  " ".join(r.get("tags") or []), ", ".join(tech_label(t) for t in r.get("tech") or []),
@@ -159,6 +161,22 @@ def build_sheets(results, exposures=None, inventory=None, takeovers=None):
                 seen.add((r["url"], i))
                 issues.append([r["url"], i])
     sheets.append(("En-têtes", ["URL", "Constat"], issues))
+    pc, seen_pc = [], set()
+    for r in results:  # one line per page, whatever the number of user agents
+        if not r.get("file") or r["url"] in seen_pc:
+            continue
+        seen_pc.add(r["url"])
+        cols = [r.get(k) or [] for k in ("waf", "mixed_content", "no_sri", "trackers", "third_party_hosts")]
+        if any(cols) or r.get("waf_probe"):
+            pc.append([r["url"], ", ".join(cols[0]), r.get("waf_probe") or "", "\n".join(cols[1]), "\n".join(cols[2]),
+                       "\n".join(cols[3]), " ".join(cols[4])])
+    if pc:
+        sheets.append(("WAF, SRI, traqueurs", ["URL", "WAF / CDN (passif)", "Test WAF actif", "Contenu mixte",
+                                               "Sans SRI", "Traqueurs", "Hôtes tiers"], pc))
+    if reputation:
+        sheets.append(("Réputation", ["Niveau", "Nom", "Bloqué par", "URLhaus", "VirusTotal", "Safe Browsing", "Erreurs"],
+                       [[x["level"], x["host"], ", ".join(x["blocked_by"]), x["urlhaus"], x["virustotal"],
+                         ", ".join(x["safe_browsing"]), "; ".join(x["errors"])] for x in reputation]))
     files = [[f["severity"], f["url"], f["size"]] for r in results for f in r.get("files_found") or []]
     if files:
         sheets.append(("Fichiers exposés", ["Gravité", "URL", "Octets lus"], files))

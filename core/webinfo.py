@@ -130,14 +130,29 @@ def cookie_list(headers):
     return out
 
 
-def detect_tech(headers, page_html, title):
-    """-> [{"name", "version", "cpes", "admin"}], one entry per technology."""
+_COMPILED_CACHE = {}
+
+
+def _compiled(rules):
+    """Compiled form of a rule list (technologies, WAF), cached."""
+    if rules is None:
+        return _COMPILED
+    key = id(rules)
+    if key not in _COMPILED_CACHE:
+        _COMPILED_CACHE[key] = [(name, cpes, admin, [(where, re.compile(rx, re.I)) for where, rx in pats])
+                                for name, cpes, admin, pats in rules]
+    return _COMPILED_CACHE[key]
+
+
+def detect_tech(headers, page_html, title, rules=None):
+    """-> [{"name", "version", "cpes", "admin"}], one entry per technology.
+    rules: another rule list in the RULES format (WAF signatures), default the technologies."""
     hmap = header_map(headers)
     cookies = [n for n, _ in cookie_list(headers)]
     scripts = _SCRIPT_RX.findall(page_html or "")
     gens = [a or b for a, b in _GEN_RX.findall(page_html or "")]
     found = []
-    for name, cpes, admin, pats in _COMPILED:
+    for name, cpes, admin, pats in _compiled(rules):
         hit, version = False, ""
         for where, rx in pats:
             if where.startswith("header:"):
