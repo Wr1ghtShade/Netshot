@@ -720,7 +720,7 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
         exposures = await asyncio.to_thread(enrich, results, getattr(args, "keys", None) or {}, log)
         write_exposure_csv(exposures, args.output)
     reputation = None
-    if getattr(args, "enrich", False) and results and not (stop and stop.is_set()):
+    if getattr(args, "reputation", getattr(args, "enrich", False)) and results and not (stop and stop.is_set()):
         reputation = await asyncio.to_thread(check_reputation, results, exposures,
                                              getattr(args, "keys", None) or {}, log, stop)
         write_reputation_csv(reputation, args.output / "reputation.csv")
@@ -805,6 +805,9 @@ def main():
                     help="do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS), look up the "
                          "CVEs of the versions found (NVD) nor check the reputation of the host names (block "
                          "lists, URLhaus, VirusTotal, Safe Browsing)")
+    ap.add_argument("--no-reputation", action="store_true",
+                    help="do not check the reputation of the host names (block lists, URLhaus, VirusTotal, "
+                         "Safe Browsing); --no-enrich turns it off too")
     ap.add_argument("--no-analyze", action="store_true",
                     help="do not analyse the pages (technologies, sensitive pages, security headers, "
                          "favicon hash, similar pages)")
@@ -907,6 +910,7 @@ def main():
         return
     args.keys = keys
     args.enrich = not args.no_enrich
+    args.reputation = args.enrich and not args.no_reputation
     args.analyze = not args.no_analyze
     try:
         args.proxy = parse_proxy(args.proxy)

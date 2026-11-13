@@ -262,8 +262,9 @@ service, et `exposure.csv`. Désactivable avec `--no-enrich` ou la case de l'int
 
 ### 🚦 Réputation des noms (listes de blocage, malware, phishing)
 
-Avec l'enrichissement, chaque nom d'hôte **public** scanné est vérifié (un nom qui pointe vers une IP
-interne n'est jamais envoyé) :
+Chaque nom d'hôte **public** scanné est vérifié (un nom qui pointe vers une IP
+interne n'est jamais envoyé). Désactivable avec `--no-reputation` (ou `--no-enrich`) ou la case
+« Réputation des noms » de l'interface :
 
 | Source | Clé | Ce qui est relevé |
 |---|---|---|
@@ -335,18 +336,22 @@ Dans l'ordre du déroulé d'une reconnaissance :
 
 #### 📸 Onglet Scan
 
-- **Cibles** : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou chargement d'un fichier texte ou CSV.
-- **Options** : ports, dossier de sortie, nombre de tests en parallèle, timeouts, délai entre deux captures,
-  résolution (1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile).
-- **Cases** : « Enrichir les IP, les versions et la réputation » (Shodan, LeakIX, NVD, KEV, EPSS, listes de
-  blocage), « Analyser les certificats TLS »,
-  « Inscrire l'URL sur les captures » (bandeau hôte:port, URL, statut et date en bas de chaque image),
-  « Tester les dossiers courants (Index of) », « Tester les fichiers sensibles (.env, .git…) » et
-  « Tester la présence d'un WAF (requête de test) » (désactivées par défaut).
-- **User agents** : sélection rapide Navig. / Bots / Tous / Aucun, ou UA personnalisé.
-- **Pendant le scan** : barre de progression, boutons Arrêter, Ouvrir le dossier, Ouvrir le rapport.
-- **Dernière capture** : aperçu affiché à côté du journal ; clic pour l'ouvrir en grand, **Effacer** pour le vider
-  (le fichier PNG reste dans le dossier).
+- **Cibles** (à gauche) : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou **Charger un fichier / CSV…**.
+  Un compteur indique le nombre d'entrées et une estimation du nombre d'adresses (plages CIDR).
+- **Ports** : liste libre ou préréglages en boutons (Défaut, Web étendu, Services non web, Web + services).
+- **User agents** : boutons à cocher sous les ports, sélection rapide Navigateurs / Robots / Tous / Aucun,
+  UA personnalisé. Aucun coché = UA du navigateur.
+- **Analyse passive** (à droite, en bleu) : « Enrichir les IP et les versions », « Réputation des noms »,
+  « Analyser les certificats TLS », « Inscrire l'URL sur les captures ».
+- **Tests actifs** (en orange, désactivés par défaut, requêtes en plus) : dossiers courants (Index of),
+  fichiers sensibles (.env, .git…), présence d'un WAF.
+- **Réglages avancés** (replié, avec un résumé) : dossier de sortie, tests en parallèle, timeouts, délai entre
+  deux captures, résolution (1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile).
+- **Périmètre et proxy** (replié, avec un résumé) : voir « Périmètre et proxy ».
+- **Barre d'action**, toujours visible en bas de l'onglet : Lancer le scan, Arrêter, progression, Ouvrir le
+  dossier, Ouvrir le rapport.
+- **Journal / Dernière capture** : deux onglets sous la barre d'action ; un point signale une nouvelle capture.
+  Clic sur l'aperçu pour ouvrir l'image, **Effacer** pour le vider (le fichier PNG reste dans le dossier).
 
 Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par défaut `netshot\screenshots\`).
 
@@ -378,6 +383,7 @@ Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par d
 | `--save-keys` | enregistre les `--key` | - |
 | `--list-sources` | liste les sources et les clés configurées | - |
 | `--no-enrich` | désactive l'enrichissement des IP, la recherche des CVE dans NVD et la réputation des noms | enrichissement actif |
+| `--no-reputation` | désactive seulement la réputation des noms | réputation active |
 | `--no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires) | analyse active |
 | `--exclude CIBLES` | cibles hors périmètre : IP, CIDR, nom ou `*.domaine`, séparées par des virgules (répétable) | - |
 | `--exclude-file FILE` | fichier de cibles hors périmètre, une par ligne (répétable) | - |

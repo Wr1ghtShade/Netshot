@@ -3,6 +3,58 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.1] - 2026-11-13
+
+Refonte de l'interface, étape 1 : en-tête et onglet Scan, d'après la maquette validée (même
+organisation que la version Go 1.2.1).
+
+### Modifié
+
+**Thème**
+- Les deux thèmes utilisent maintenant le thème ttk « clam » recoloré à partir d'une palette
+  (`LIGHT`, `DARK` dans `core/theme.py`). Le thème clair n'est plus l'aspect natif Windows
+  (« vista ») : c'est ce qui permet le bouton bleu, les groupes colorés et les boutons à cocher,
+  identiques à la version Go.
+- Nouveaux styles : `Accent.TButton`, `Big.TButton`, `Quit.TButton`, `Link.TButton`,
+  `Fold.TButton`, `Chip.Toolbutton`, `Passive.TLabelframe`, `Active.TLabelframe`,
+  `Active.TCheckbutton`, `Muted.TLabel`, `Pill.TLabel`, `Section.TLabel`.
+- Journal en console sombre dans les deux thèmes.
+
+**En-tête**
+- Bouton « Quitter » discret (texte rouge, plein au survol).
+
+**Onglet Scan**
+- Colonne de gauche : cibles avec un compteur (entrées et estimation du nombre d'adresses des plages
+  CIDR, « + AS » si un AS est présent), aide sous la zone, ports avec préréglages en boutons
+  (Défaut, Web étendu, Services non web, Web + services), user agents en boutons à cocher (4 par
+  ligne) avec compteur et sélection rapide Navigateurs / Robots / Tous / Aucun.
+- Colonne de droite : **Analyse passive** (bleu) et **Tests actifs** (orange, « requêtes en plus »),
+  chaque option avec une ligne de détail ; **Réglages avancés** et **Périmètre et proxy** repliés
+  avec un résumé mis à jour en direct.
+- Barre d'action toujours visible en bas de l'onglet : Lancer le scan (bleu), Arrêter, barre de
+  progression fine (6 px, nouvelle classe `ThinProgress`), Ouvrir le dossier, Ouvrir le rapport.
+  La grosse barre verte disparaît.
+- Journal et dernière capture dans un `ttk.Notebook` à deux onglets ; « ● » sur l'onglet capture
+  signale une capture pas encore vue. Les autres onglets n'affichent que le journal.
+
+**Réputation des noms**
+- Case séparée de l'enrichissement dans l'interface.
+- Nouvelle option `--no-reputation` ; `--no-enrich` coupe toujours les deux.
+- Sans enrichissement, les noms sont résolus par le résolveur du système pour écarter ceux qui
+  pointent vers une IP interne (aucun appel à un tiers pour ça).
+
+### Fichiers
+- `core/gui.py` (en-tête, `_build_scan_tab`, panneau du bas, `layout_for_tab`, compteurs,
+  `ThinProgress`, user agents en cases à cocher au lieu d'une liste).
+- `core/theme.py` (palettes, styles), `core/scan.py` (`--no-reputation`, `args.reputation`),
+  `core/reputation.py` (`_resolve_hosts`), `core/__init__.py`, `README.md`.
+
+### Tests
+- Interface lancée sous Xvfb (Tk 8.6), thèmes clair et sombre, captures d'écran vérifiées ;
+  scan lancé depuis l'interface sur une page locale : progression, rapport, aperçu de capture et
+  marque de nouvelle capture vérifiés.
+- Non vérifié sous Windows : le rendu du thème « clam » y est très proche, mais pas testé.
+
 ## [1.2.0] - 2026-11-13
 
 Ajout des contrôles de [web-check](https://web-check.xyz/checks) qui manquaient à NetShot, sans passer

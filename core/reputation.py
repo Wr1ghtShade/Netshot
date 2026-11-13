@@ -190,8 +190,27 @@ def _is_ip(text):
         return False
 
 
+def _resolve_hosts(results):
+    """[{ip, hosts, internal}] for the host names scanned, from the system resolver only."""
+    import socket
+    from .sources import is_internal_ip
+
+    def one(h):
+        try:
+            ips = sorted({i[4][0].split("%")[0] for i in socket.getaddrinfo(h, None)})
+        except (socket.gaierror, UnicodeError, OSError):
+            ips = []
+        return [{"ip": ip, "hosts": [h], "internal": is_internal_ip(ip)} for ip in ips]
+
+    names = sorted({r["host"] for r in results if not _is_ip(r["host"])})
+    with ThreadPoolExecutor(16) as pool:
+        return [x for lst in pool.map(one, names) for x in lst]
+
+
 def check_reputation(results, exposures, keys, log=print, stop=None):
     """Looks up the public host names of the scan. Names of internal IPs are skipped."""
+    if exposures is None:  # enrichment off: resolve the names here, without any third-party lookup
+        exposures = _resolve_hosts(results)
     internal, public = set(), set()
     for x in exposures or []:
         for h in x["hosts"]:

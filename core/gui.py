@@ -106,6 +106,38 @@ class SoftButton(tk.Button):
     config = configure
 
 
+class ThinProgress(tk.Canvas):
+    """6 px progress bar (a ttk one cannot be that thin in the clam theme). Same calls as the
+    ttk.Progressbar it replaces: configure(maximum=..., value=...)."""
+
+    def __init__(self, parent, height=6):
+        super().__init__(parent, height=height, highlightthickness=0, bd=0)
+        self._max, self._value, self._colors = 1.0, 0.0, ("#d1d5db", "#2563eb")
+        self.bind("<Configure>", lambda e: self._draw())
+
+    def set_colors(self, trough, bar):
+        self._colors = (trough, bar)
+        self._draw()
+
+    def _draw(self):
+        w, h = self.winfo_width(), int(self.cget("height"))
+        self.delete("all")
+        tk.Canvas.configure(self, background=self._colors[0])
+        if self._max > 0 and self._value > 0:
+            self.create_rectangle(0, 0, w * min(1.0, self._value / self._max), h, fill=self._colors[1], width=0)
+
+    def configure(self, cnf=None, **kw):
+        if "maximum" in kw:
+            self._max = float(kw.pop("maximum"))
+        if "value" in kw:
+            self._value = float(kw.pop("value"))
+        result = super().configure(cnf, **kw) if (cnf or kw) else None
+        self._draw()
+        return result
+
+    config = configure
+
+
 class NetshotApp:
     def __init__(self, root):
         self.root = root
@@ -142,9 +174,7 @@ class NetshotApp:
             ttk.Label(header, image=self.logo_small).pack(side="left", padx=(0, 6))
         ttk.Label(header, text="NetShot", font=("Segoe UI", 14, "bold")).pack(side="left")
         ttk.Label(header, text=f"v{__version__}", foreground="#888").pack(side="left", padx=(6, 0), pady=(4, 0))
-        tk.Button(header, text="Quitter", command=self.on_close, bg="#dc2626", fg="white",
-                  activebackground="#b91c1c", activeforeground="white", relief="flat",
-                  font=("Segoe UI", 9, "bold"), padx=14, pady=2, cursor="hand2").pack(side="right")
+        ttk.Button(header, text="Quitter", command=self.on_close, style="Quit.TButton").pack(side="right")
         self.theme_btn = ttk.Button(header, command=self.toggle_theme, width=10)
         self.theme_btn.pack(side="right", padx=(0, 8))
 
@@ -159,25 +189,27 @@ class NetshotApp:
         self._build_leaks_tab()
         self.keys_tab = self._build_keys_tab()
 
-        # Log (left) + preview of the last screenshot (right), shared by all tabs
-        bottom = ttk.PanedWindow(outer, orient="horizontal")
+        # Journal and last capture: one panel with two tabs (the capture tab only on the Scan tab)
+        bottom = ttk.Notebook(outer)
         bottom.grid(row=2, column=0, sticky="nsew")
         self.bottom, self.outer = bottom, outer
-        log_box = ttk.LabelFrame(bottom, text="Journal", padding=4)
-        bottom.add(log_box, weight=1)
-        # Reset of the log also clears the last capture shown on the right
+        log_box = ttk.Frame(bottom, padding=4)
+        bottom.add(log_box, text="Journal")
+        # Reset of the log also clears the last capture
         self._tool_buttons(log_box, lambda: self.log.get("1.0", "end"), self.reset_bottom).pack(anchor="e")
-        self.log = scrolledtext.ScrolledText(log_box, height=5, width=50, font=("Consolas", 9), state="disabled")
-        self.log.tag_configure("err", foreground="#dc2626")
+        self.log = scrolledtext.ScrolledText(log_box, height=5, width=50, font=("Consolas", 9), state="disabled",
+                                             relief="flat", padx=8, pady=6)
+        self.log.is_log = True  # dark console in both themes (theme.py)
+        self.log.tag_configure("err", foreground="#f87171")
         self.log.pack(fill="both", expand=True)
-        preview = ttk.LabelFrame(bottom, text="Dernière capture", padding=4)
-        bottom.add(preview, weight=1)
+        preview = ttk.Frame(bottom, padding=4)
+        bottom.add(preview, text="Dernière capture")
         self.preview_box = preview
         self.preview_info = tk.StringVar(value="-")
         info_row = ttk.Frame(preview)
         info_row.pack(fill="x")
         ttk.Button(info_row, text="Effacer", width=8, command=self.reset_preview).pack(side="right")
-        ttk.Label(info_row, textvariable=self.preview_info, wraplength=420).pack(side="left", anchor="w")
+        ttk.Label(info_row, textvariable=self.preview_info, wraplength=700).pack(side="left", anchor="w")
         # Fixed-size area: the image is scaled to it, so it never pushes the window
         self.preview_area = ttk.Frame(preview)
         self.preview_area.pack(fill="both", expand=True)
@@ -187,6 +219,9 @@ class NetshotApp:
         self.preview.bind("<Button-1>", lambda e: self.preview_path and self.open_path(self.preview_path))
         self.refresh_sources(first=True)
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.layout_for_tab())
+        self.bottom.bind("<<NotebookTabChanged>>", lambda e: self.bottom.tab(self.preview_box, text="Dernière capture")
+                         if self.bottom.index("current") == self.bottom.index(self.preview_box) else None)
+        self.update_targets_count()
         theme.themed_scrollbars(root)
         self.theme = theme.ThemeManager(root)
         self.set_theme(theme.load_choice() or ("dark" if theme.system_prefers_dark() else "light"), save=False)
@@ -197,120 +232,196 @@ class NetshotApp:
     # --- Tabs -------------------------------------------------------------
 
     def _build_scan_tab(self):
-        main = ttk.Frame(self.nb, padding=10)
+        """Same layout as the Go version: targets, ports and user agents on the left; option groups
+        on the right (passive analysis, active tests, folded settings); action bar at the bottom."""
+        main = ttk.Frame(self.nb, padding=(10, 8, 10, 6))
         self.nb.add(main, text=TAB_SCAN)
-        main.columnconfigure(1, weight=1)
-        main.rowconfigure(1, weight=1)
+        main.columnconfigure(0, weight=1)
+        main.rowconfigure(0, weight=1)
 
-        ttk.Label(main, text="Cibles (IP, CIDR, AS1234 ou hôte, une par ligne) :").grid(row=0, column=0, columnspan=3, sticky="w")
-        self.targets = scrolledtext.ScrolledText(main, height=6, font=("Consolas", 10))
-        self.targets.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(2, 8))
+        # --- Left: targets, ports, user agents
+        left = ttk.LabelFrame(main, text="CIBLES", padding=8)
+        left.grid(row=0, column=0, sticky="nsew")
+        left.columnconfigure(0, weight=1)
+        left.rowconfigure(1, weight=1)
+        head = ttk.Frame(left)
+        head.grid(row=0, column=0, sticky="ew")
+        self.targets_pill = tk.StringVar()
+        ttk.Label(head, textvariable=self.targets_pill, style="Pill.TLabel").pack(side="left")
+        self._tool_buttons(head, lambda: self.targets.get("1.0", "end"), self.reset_targets).pack(side="right")
+        ttk.Button(head, text="Charger fichier / CSV…", command=self.load_file).pack(side="right", padx=(0, 6))
+        self.targets = scrolledtext.ScrolledText(left, height=6, font=("Consolas", 10), relief="flat",
+                                                 padx=8, pady=6, highlightthickness=1)
+        self.targets.grid(row=1, column=0, sticky="nsew", pady=(6, 2))
         self.targets.bind("<KeyRelease>", lambda e: self.update_targets_count())
-        side = ttk.Frame(main)
-        side.grid(row=1, column=2, sticky="n", padx=(8, 0), pady=(2, 0))
-        ttk.Button(side, text="Charger fichier / CSV…", command=self.load_file).pack(fill="x")
-        self._tool_buttons(side, lambda: self.targets.get("1.0", "end"), self.reset_targets).pack(fill="x", pady=(6, 0))
+        ttk.Label(left, style="Muted.TLabel", text="IP, plage CIDR, nom d'hôte, AS1234 ou export CSV (AD, ADCS, "
+                  "CMDB). Une cible par ligne, # pour un commentaire.").grid(row=2, column=0, sticky="w")
 
-        ttk.Label(main, text="Ports :").grid(row=2, column=0, sticky="w")
+        ports_row = ttk.Frame(left)
+        ports_row.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        ports_row.columnconfigure(1, weight=1)
+        ttk.Label(ports_row, text="Ports", style="Section.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 8))
         self.ports = tk.StringVar(value=",".join(map(str, netshot.DEFAULT_PORTS)))
-        ttk.Entry(main, textvariable=self.ports).grid(row=2, column=1, sticky="ew", pady=2)
-        presets = ttk.Menubutton(main, text="Préréglages ▾")
-        menu = tk.Menu(presets, tearoff=0)
-        for label, value in (("Par défaut (80, 443, 8000, 8080, 8443)", ",".join(map(str, netshot.DEFAULT_PORTS))),
-                             ("Web étendu (~100 ports)", "web"), ("Services non web (SSH, FTP, RDP, bases…)", "services"),
-                             ("Web étendu + services", "web,services")):
-            menu.add_command(label=label, command=lambda v=value: self.ports.set(v))
-        presets["menu"] = menu
-        presets.grid(row=2, column=2, padx=(8, 0), sticky="w")
-        ttk.Label(main, text="Dossier de sortie :").grid(row=3, column=0, sticky="w")
-        self.outdir = tk.StringVar(value=str(HERE / "screenshots"))
-        ttk.Entry(main, textvariable=self.outdir).grid(row=3, column=1, sticky="ew", pady=2)
-        ttk.Button(main, text="Parcourir…", command=self.pick_outdir).grid(row=3, column=2, padx=(8, 0))
+        ttk.Entry(ports_row, textvariable=self.ports, font=("Consolas", 10)).grid(row=0, column=1, sticky="ew")
+        chips = ttk.Frame(ports_row)
+        chips.grid(row=0, column=2, padx=(8, 0))
+        self.ports_preset = tk.StringVar()
+        defaults = ",".join(map(str, netshot.DEFAULT_PORTS))
+        for label, value in (("Défaut", defaults), ("Web étendu (~100)", "web"),
+                             ("Services non web", "services"), ("Web + services", "web,services")):
+            ttk.Radiobutton(chips, text=label, value=value, variable=self.ports_preset, style="Chip.Toolbutton",
+                            command=lambda v=value: self.ports.set(v)).pack(side="left", padx=(0, 4))
+        self.ports.trace_add("write", lambda *a: self.ports_preset.set(self.ports.get().replace(" ", "")))
+        self.ports_preset.set(defaults)
 
-        opts = ttk.Frame(main)
-        opts.grid(row=4, column=0, columnspan=3, sticky="w", pady=(6, 2))
+        # User agents: toggle chips. Nothing selected = Chromium's own UA.
+        ua_head = ttk.Frame(left)
+        ua_head.grid(row=4, column=0, sticky="ew", pady=(10, 2))
+        ttk.Label(ua_head, text="User agents", style="Section.TLabel").pack(side="left")
+        for label, names in (("Aucun", {}), ("Tous", netshot.USER_AGENTS), ("Robots", netshot.BOT_UAS),
+                             ("Navigateurs", netshot.BROWSER_UAS)):
+            ttk.Button(ua_head, text=label, style="Link.TButton", width=0,
+                       command=lambda n=names: self.select_uas(n)).pack(side="right")
+        self.ua_count = tk.StringVar()
+        ttk.Label(ua_head, textvariable=self.ua_count, style="Muted.TLabel").pack(side="right", padx=(0, 8))
+        ua_box = ttk.Frame(left)
+        ua_box.grid(row=5, column=0, sticky="ew")
+        self.ua_names = list(netshot.USER_AGENTS)
+        self.ua_vars = {}
+        for i, name in enumerate(self.ua_names):
+            kind = "bot" if name in netshot.BOT_UAS else "nav"
+            self.ua_vars[name] = tk.BooleanVar(value=False)
+            ttk.Checkbutton(ua_box, text=f"{name}  {kind}", variable=self.ua_vars[name], style="Chip.Toolbutton",
+                            command=self.update_ua_count).grid(row=i // 4, column=i % 4, sticky="ew", padx=(0, 4), pady=2)
+        for col in range(4):
+            ua_box.columnconfigure(col, weight=1, uniform="ua")
+        self.custom_ua = tk.StringVar()
+        custom = ttk.Frame(left)
+        custom.grid(row=6, column=0, sticky="ew", pady=(4, 0))
+        custom.columnconfigure(1, weight=1)
+        ttk.Label(custom, text="UA personnalisé", style="Muted.TLabel").grid(row=0, column=0, padx=(0, 8))
+        ttk.Entry(custom, textvariable=self.custom_ua).grid(row=0, column=1, sticky="ew")
+        self.update_ua_count()
+
+        # --- Right: option groups
+        side = ttk.Frame(main, width=360)
+        side.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+
+        def option(parent, var, title, detail, active=False):
+            box = ttk.Frame(parent)
+            box.pack(fill="x", pady=(4, 2))
+            ttk.Checkbutton(box, text=title, variable=var,
+                            style="Active.TCheckbutton" if active else "TCheckbutton").pack(anchor="w")
+            ttk.Label(box, text=detail, style="Muted.TLabel").pack(anchor="w", padx=(22, 0))
+
+        passive = ttk.LabelFrame(side, text="ANALYSE PASSIVE", style="Passive.TLabelframe", padding=(10, 4, 10, 8))
+        passive.pack(fill="x")
+        self.enrich = tk.BooleanVar(value=True)
+        self.reputation = tk.BooleanVar(value=True)
+        self.tls_scan = tk.BooleanVar(value=True)
+        self.label_shots = tk.BooleanVar(value=True)
+        option(passive, self.enrich, "Enrichir les IP et les versions", "Shodan, LeakIX, NVD, CISA KEV, EPSS")
+        option(passive, self.reputation, "Réputation des noms", "Listes de blocage, URLhaus, VirusTotal, Safe Browsing")
+        option(passive, self.tls_scan, "Analyser les certificats TLS", "Versions, suites, PQC, chaîne, HSTS")
+        option(passive, self.label_shots, "Inscrire l'URL sur les captures", "Bandeau hôte:port, URL, statut, date")
+
+        active = ttk.LabelFrame(side, text="TESTS ACTIFS  ·  requêtes en plus", style="Active.TLabelframe",
+                                padding=(10, 4, 10, 8))
+        active.pack(fill="x", pady=(10, 0))
+        self.probe_dirs = tk.BooleanVar(value=False)
+        self.probe_files = tk.BooleanVar(value=False)
+        self.waf_probe = tk.BooleanVar(value=False)
+        option(active, self.probe_dirs, "Dossiers courants (Index of)", "~95 requêtes par service web", True)
+        option(active, self.probe_files, "Fichiers sensibles (.env, .git…)", "~65 requêtes par service web", True)
+        option(active, self.waf_probe, "Présence d'un WAF", "1 requête de test par service web", True)
+
+        # Folded settings: a header button with a one-line summary, the fields once opened
+        self.outdir = tk.StringVar(value=str(HERE / "screenshots"))
         self.concurrency = tk.IntVar(value=10)
         self.connect_timeout = tk.DoubleVar(value=1.5)
         self.page_timeout = tk.DoubleVar(value=15)
         self.delay = tk.DoubleVar(value=0)
-        for label, var, lo, hi, inc in (
-            ("Parallèle", self.concurrency, 1, 200, 1),
-            ("Timeout TCP (s)", self.connect_timeout, 0.2, 30, 0.5),
-            ("Timeout page (s)", self.page_timeout, 1, 120, 1),
-            ("Délai entre captures (s)", self.delay, 0, 600, 0.5),
-        ):
-            ttk.Label(opts, text=label).pack(side="left")
-            ttk.Spinbox(opts, textvariable=var, from_=lo, to=hi, increment=inc, width=6).pack(side="left", padx=(4, 16))
-        opts2 = ttk.Frame(main)
-        opts2.grid(row=5, column=0, columnspan=3, sticky="w", pady=(2, 8))
-        ttk.Label(opts2, text="Résolution").pack(side="left")
         self.resolution = tk.StringVar(value="1920 x 1080 (Full HD)")
-        ttk.Combobox(opts2, textvariable=self.resolution, values=list(RESOLUTIONS), state="readonly",
-                     width=20).pack(side="left", padx=(4, 16))
-        self.enrich = tk.BooleanVar(value=True)
-        ttk.Checkbutton(opts2, text="Enrichir les IP, les versions et la réputation (Shodan, LeakIX, NVD, KEV, EPSS, "
-                                    "listes de blocage)",
-                        variable=self.enrich).pack(side="left", padx=(0, 16))
-        self.tls_scan = tk.BooleanVar(value=True)
-        ttk.Checkbutton(opts2, text="Analyser les certificats TLS", variable=self.tls_scan).pack(side="left")
-        self.label_shots = tk.BooleanVar(value=True)
-        opts3 = ttk.Frame(main)
-        opts3.grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 8))
-        ttk.Checkbutton(opts3, text="Inscrire l'URL sur les captures", variable=self.label_shots).pack(side="left")
-        self.probe_dirs = tk.BooleanVar(value=False)
-        ttk.Checkbutton(opts3, text="Tester les dossiers courants (Index of)", variable=self.probe_dirs).pack(
-            side="left", padx=(16, 0))
-        self.probe_files = tk.BooleanVar(value=False)
-        ttk.Checkbutton(opts3, text="Tester les fichiers sensibles (.env, .git…)", variable=self.probe_files).pack(
-            side="left", padx=(16, 0))
-        self.waf_probe = tk.BooleanVar(value=False)
-        ttk.Checkbutton(opts3, text="Tester la présence d'un WAF (requête de test)", variable=self.waf_probe).pack(
-            side="left", padx=(16, 0))
-        opts4 = ttk.Frame(main)
-        opts4.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(0, 8))
-        ttk.Label(opts4, text="Proxy").pack(side="left")
         self.proxy = tk.StringVar()
-        ttk.Entry(opts4, textvariable=self.proxy, width=26).pack(side="left", padx=(4, 4))
-        ttk.Label(opts4, text="ex. http://127.0.0.1:8080", foreground="#888").pack(side="left", padx=(0, 16))
-        ttk.Label(opts4, text="Hors périmètre").pack(side="left")
         self.exclude = tk.StringVar()
-        ttk.Entry(opts4, textvariable=self.exclude).pack(side="left", fill="x", expand=True, padx=(4, 4))
-        ttk.Button(opts4, text="Fichier…", command=self.load_exclusions).pack(side="left")
 
-        # User agents (right column). Nothing selected = Chromium's own UA.
-        ua_box = ttk.LabelFrame(main, text="User agents (une capture par UA)", padding=6)
-        ua_box.grid(row=0, column=3, rowspan=8, sticky="nsew", padx=(12, 0))
-        ua_box.rowconfigure(0, weight=1)
-        ua_box.columnconfigure(0, weight=1)
-        self.ua_names = list(netshot.USER_AGENTS)
-        self.ua_list = tk.Listbox(ua_box, selectmode="multiple", height=8, exportselection=False, width=24)
-        for name in self.ua_names:
-            kind = "bot" if name in netshot.BOT_UAS else "nav"
-            self.ua_list.insert("end", f"{name}  [{kind}]")
-        self.ua_list.grid(row=0, column=0, columnspan=4, sticky="nsew")
-        for col, (label, names) in enumerate((
-                ("Navig.", netshot.BROWSER_UAS), ("Bots", netshot.BOT_UAS),
-                ("Tous", netshot.USER_AGENTS), ("Aucun", {}))):
-            ttk.Button(ua_box, text=label, width=7,
-                       command=lambda n=names: self.select_uas(n)).grid(row=1, column=col, pady=(4, 0))
-        ttk.Label(ua_box, text="UA personnalisé :").grid(row=2, column=0, columnspan=4, sticky="w", pady=(6, 0))
-        self.custom_ua = tk.StringVar()
-        ttk.Entry(ua_box, textvariable=self.custom_ua).grid(row=3, column=0, columnspan=4, sticky="ew")
+        def fold(title, build, summary):
+            box = ttk.Frame(side)
+            box.pack(fill="x", pady=(10, 0))
+            text = tk.StringVar()
+            body = ttk.Frame(box, padding=(18, 4, 0, 0))
+            body.columnconfigure(1, weight=1)
+            build(body)
 
-        actions = ttk.Frame(main)
-        actions.grid(row=8, column=0, columnspan=4, sticky="ew")
-        self.start_btn = SoftButton(actions, text="Lancer le scan", command=self.start)
-        self.start_btn.pack(side="left")
-        self.stop_btn = SoftButton(actions, "danger", text="Arrêter", command=self.stop, state="disabled")
-        self.stop_btn.pack(side="left", padx=8)
-        self.report_btn = ttk.Button(actions, text="Ouvrir le rapport", command=self.open_report, state="disabled")
-        self.report_btn.pack(side="right")
-        self.folder_btn = ttk.Button(actions, text="Ouvrir le dossier", command=self.open_folder, state="disabled")
-        self.folder_btn.pack(side="right", padx=8)
-        self.progress = ttk.Progressbar(main, mode="determinate")
-        self.progress.grid(row=9, column=0, columnspan=4, sticky="ew", pady=(10, 2))
+            def toggle():
+                if body.winfo_ismapped():
+                    body.pack_forget()
+                    btn.configure(text="\u25b8  " + title)
+                    hint.pack(anchor="w", padx=(18, 0))
+                else:
+                    hint.pack_forget()
+                    body.pack(fill="x")
+                    btn.configure(text="\u25be  " + title)
+            btn = ttk.Button(box, text="\u25b8  " + title, style="Fold.TButton", command=toggle)
+            btn.pack(fill="x")
+            hint = ttk.Label(box, textvariable=text, style="Muted.TLabel")
+            hint.pack(anchor="w", padx=(18, 0))
+            return text
+
+        def advanced(body):
+            ttk.Label(body, text="Dossier de sortie").grid(row=0, column=0, sticky="w", pady=2)
+            out = ttk.Frame(body)
+            out.grid(row=0, column=1, sticky="ew", pady=2)
+            out.columnconfigure(0, weight=1)
+            ttk.Entry(out, textvariable=self.outdir).grid(row=0, column=0, sticky="ew")
+            ttk.Button(out, text="…", width=3, command=self.pick_outdir).grid(row=0, column=1, padx=(4, 0))
+            for row, (label, var, lo, hi, inc) in enumerate((
+                    ("Parallèle", self.concurrency, 1, 200, 1),
+                    ("Timeout TCP (s)", self.connect_timeout, 0.2, 30, 0.5),
+                    ("Timeout page (s)", self.page_timeout, 1, 120, 1),
+                    ("Délai entre captures (s)", self.delay, 0, 600, 0.5)), start=1):
+                ttk.Label(body, text=label).grid(row=row, column=0, sticky="w", pady=2, padx=(0, 8))
+                ttk.Spinbox(body, textvariable=var, from_=lo, to=hi, increment=inc, width=8).grid(
+                    row=row, column=1, sticky="w", pady=2)
+            ttk.Label(body, text="Résolution").grid(row=5, column=0, sticky="w", pady=2)
+            ttk.Combobox(body, textvariable=self.resolution, values=list(RESOLUTIONS), state="readonly",
+                         width=22).grid(row=5, column=1, sticky="w", pady=2)
+
+        def scope(body):
+            ttk.Label(body, text="Proxy").grid(row=0, column=0, sticky="w", pady=2, padx=(0, 8))
+            ttk.Entry(body, textvariable=self.proxy).grid(row=0, column=1, sticky="ew", pady=2)
+            ttk.Label(body, text="ex. http://127.0.0.1:8080 ou socks5://hôte:1080",
+                      style="Muted.TLabel").grid(row=1, column=1, sticky="w")
+            ttk.Label(body, text="Hors périmètre").grid(row=2, column=0, sticky="w", pady=2, padx=(0, 8))
+            ex = ttk.Frame(body)
+            ex.grid(row=2, column=1, sticky="ew", pady=2)
+            ex.columnconfigure(0, weight=1)
+            ttk.Entry(ex, textvariable=self.exclude).grid(row=0, column=0, sticky="ew")
+            ttk.Button(ex, text="Fichier…", command=self.load_exclusions).grid(row=0, column=1, padx=(4, 0))
+
+        self.adv_sum = fold("RÉGLAGES AVANCÉS", advanced, None)
+        self.scope_sum = fold("PÉRIMÈTRE ET PROXY", scope, None)
+        for var in (self.concurrency, self.connect_timeout, self.page_timeout, self.delay, self.resolution,
+                    self.proxy, self.exclude):
+            var.trace_add("write", lambda *a: self.update_fold_summaries())
+        self.update_fold_summaries()
+
+        # --- Action bar: always visible at the bottom of the tab
+        actions = ttk.Frame(main, padding=(0, 8, 0, 0))
+        actions.grid(row=1, column=0, columnspan=2, sticky="ew")
+        actions.columnconfigure(2, weight=1)
+        self.start_btn = ttk.Button(actions, text="\u25b6  Lancer le scan", style="Accent.TButton", command=self.start)
+        self.start_btn.grid(row=0, column=0, rowspan=2, sticky="ns")
+        self.stop_btn = ttk.Button(actions, text="\u25a0  Arrêter", style="Big.TButton", command=self.stop, state="disabled")
+        self.stop_btn.grid(row=0, column=1, rowspan=2, sticky="ns", padx=8)
+        self.progress = ThinProgress(actions)
+        self.progress.grid(row=0, column=2, sticky="ew", padx=(4, 8), pady=(10, 2))
         self.status = tk.StringVar(value="Prêt. Aucun UA sélectionné = UA du navigateur.")
-        ttk.Label(main, textvariable=self.status).grid(row=10, column=0, columnspan=4, sticky="w")
+        ttk.Label(actions, textvariable=self.status, style="Muted.TLabel").grid(row=1, column=2, sticky="w", padx=(4, 8))
+        self.folder_btn = ttk.Button(actions, text="Ouvrir le dossier", command=self.open_folder, state="disabled")
+        self.folder_btn.grid(row=0, column=3, rowspan=2, sticky="ns")
+        self.report_btn = ttk.Button(actions, text="Ouvrir le rapport", command=self.open_report, state="disabled")
+        self.report_btn.grid(row=0, column=4, rowspan=2, sticky="ns", padx=(6, 0))
         return main
 
     def _build_subs_tab(self):
@@ -398,6 +509,7 @@ class NetshotApp:
         dark = name == "dark"
         self.theme.apply(dark)
         self.theme_btn.configure(text="\u2600 Clair" if dark else "\u263e Sombre")
+        self.log.configure(highlightthickness=0)
         if save:
             theme.save_choice(name)
 
@@ -405,25 +517,22 @@ class NetshotApp:
         self.set_theme("light" if self.theme.dark else "dark")
 
     def layout_for_tab(self):
-        """Whois uses the whole window height (no journal, no capture); Scan shows the journal and the
-        last capture; every other tab shows the journal alone, over the full width."""
+        """Whois uses the whole window height (no journal); Scan shows the journal and the last capture
+        as two tabs; every other tab shows the journal alone."""
         tab = self.nb.tab(self.nb.select(), "text")
         if tab == TAB_WHOIS:
             self.bottom.grid_remove()
             self.outer.rowconfigure(2, weight=0)
             return
         self.bottom.grid()
-        # Scan: taller journal and capture (original layout); other tabs: compact journal
         scan = self.nb.select() == str(self.scan_tab)
-        self.outer.rowconfigure(1, weight=3 if scan else 6)
-        self.outer.rowconfigure(2, weight=2 if scan else 1)
-        self.log.configure(height=10 if scan else 5)
-        shown = str(self.preview_box) in self.bottom.panes()
-        if self.nb.select() != str(self.scan_tab):  # the capture only matters while scanning
-            if shown:
-                self.bottom.forget(self.preview_box)
-        elif not shown:
-            self.bottom.add(self.preview_box, weight=1)
+        self.outer.rowconfigure(1, weight=5 if scan else 6)
+        self.outer.rowconfigure(2, weight=1)
+        if scan:
+            self.bottom.add(self.preview_box)  # shows the capture tab again (it stays in place)
+        else:
+            self.bottom.select(0)
+            self.bottom.hide(self.preview_box)
 
     def _build_whois_tab(self):
         tab = ttk.Frame(self.nb, padding=10)
@@ -799,8 +908,41 @@ class NetshotApp:
         self.nb.tab(self.certs_tab, text=TAB_CERTS)
 
     def update_targets_count(self):
-        n = sum(1 for l in self.targets.get("1.0", "end").splitlines() if l.split("#", 1)[0].strip())
+        lines = [l.split("#", 1)[0].strip() for l in self.targets.get("1.0", "end").splitlines()]
+        lines = [l for l in lines if l]
+        n = len(lines)
         self.nb.tab(self.scan_tab, text=f"{TAB_SCAN} ({n})" if n else TAB_SCAN)
+        # Rough count of addresses: IPv4 CIDR ranges are expanded, AS numbers are not known yet
+        addrs, has_as = 0, False
+        for l in lines:
+            ip, sep, bits = l.partition("/")
+            if sep and bits.isdigit() and ip.count(".") == 3:
+                addrs += 2 ** (32 - min(32, int(bits)))
+            elif sources.ASN_RE.match(l):
+                has_as = True
+            else:
+                addrs += 1
+        text = f"{n} entrée{'s' if n > 1 else ''}" if n else "Aucune cible"
+        if addrs > n:
+            text += f" · ~{addrs:,} adresses".replace(",", " ")
+        self.targets_pill.set(text + (" + AS" if has_as else ""))
+
+    def update_ua_count(self):
+        n = sum(v.get() for v in self.ua_vars.values())
+        self.ua_count.set(f"{n} sélectionné{'s' if n > 1 else ''}" if n else "UA du navigateur")
+
+    def update_fold_summaries(self):
+        try:
+            delay = float(self.delay.get())
+            adv = (f"{self.concurrency.get()} en parallèle · TCP {self.connect_timeout.get()} s · "
+                   f"page {self.page_timeout.get()} s" + (f" · délai {delay:g} s" if delay > 0 else ""))
+        except (tk.TclError, ValueError):
+            adv = "valeur invalide"
+        self.adv_sum.set(f"{adv} · {self.resolution.get().split(' (')[0].replace(' x ', '×')}")
+        n = len([x for x in self.exclude.get().replace(",", " ").split() if x])
+        proxy = self.proxy.get().strip()
+        self.scope_sum.set((f"proxy {proxy}" if proxy else "aucun proxy") + " · " +
+                           (f"{n} exclusion{'s' if n > 1 else ''}" if n else "aucune exclusion"))
 
     # --- UI helpers -------------------------------------------------------
 
@@ -868,13 +1010,12 @@ class NetshotApp:
         self.root.after(100, self.poll_queue)
 
     def select_uas(self, names):
-        self.ua_list.selection_clear(0, "end")
-        for i, name in enumerate(self.ua_names):
-            if name in names:
-                self.ua_list.selection_set(i)
+        for name, var in self.ua_vars.items():
+            var.set(name in names)
+        self.update_ua_count()
 
     def selected_uas(self):
-        values = [self.ua_names[i] for i in self.ua_list.curselection()]
+        values = [name for name in self.ua_names if self.ua_vars[name].get()]
         if self.custom_ua.get().strip():
             values.append(self.custom_ua.get().strip())
         return netshot.resolve_user_agents(values)
@@ -892,6 +1033,8 @@ class NetshotApp:
         self.preview.configure(image=self.preview_img, text="")
         self.preview_path = Path(path)
         self.preview_info.set(f"{url}  [{status}]  {title}  - UA : {ua_name}")
+        if self.bottom.index("current") != self.bottom.index(self.preview_box):
+            self.bottom.tab(self.preview_box, text="Dernière capture  \u25cf")
 
     # --- Passive sources and API keys ----------------------------------------
 
@@ -1205,7 +1348,8 @@ class NetshotApp:
         width, height = RESOLUTIONS.get(self.resolution.get(), (1920, 1080))
         args = SimpleNamespace(output=output, concurrency=concurrency, connect_timeout=connect_timeout,
                                page_timeout=page_timeout, delay=delay, user_agents=user_agents,
-                               width=width, height=height, enrich=self.enrich.get(), keys=dict(self.keys),
+                               width=width, height=height, enrich=self.enrich.get(),
+                               reputation=self.reputation.get(), keys=dict(self.keys),
                                tls=self.tls_scan.get(), label=self.label_shots.get(),
                                dirs=dir_words() if self.probe_dirs.get() else None,
                                proxy=proxy, exclusions=exclusions,
