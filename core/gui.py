@@ -124,9 +124,13 @@ class NetshotApp:
         # Header: Quit button on the right of the tabs
         header = ttk.Frame(outer)
         header.grid(row=0, column=0, sticky="ew")
-        # Brand: small logo + NetShot (icon.png is 256 px: subsample to 32 px)
-        if icon.exists():
+        # Brand: small logo + NetShot (icon-32.png is drawn for 32 px; else icon.png subsampled)
+        small = ASSETS / "icon-32.png"
+        if small.exists():
+            self.logo_small = tk.PhotoImage(file=str(small))
+        elif icon.exists():
             self.logo_small = self.icon.subsample(8)
+        if small.exists() or icon.exists():
             ttk.Label(header, image=self.logo_small).pack(side="left", padx=(0, 6))
         ttk.Label(header, text="NetShot", font=("Segoe UI", 14, "bold")).pack(side="left")
         ttk.Label(header, text=f"v{__version__}", foreground="#888").pack(side="left", padx=(6, 0), pady=(4, 0))

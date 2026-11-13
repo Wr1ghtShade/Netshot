@@ -7,7 +7,7 @@ priorisation KEV / EPSS).
 Version Python ; même fonctionnement que la version Go (projet `netshot-go`).
 `keys.json` (clés API) et `settings.json` (thème) ne sont jamais versionnés (`.gitignore`).
 
-![NetShot (Python) : onglet Scan (version 1.2.2)](docs/netshot-python.png)
+![NetShot (Python) : onglet Scan (version 1.2.3)](docs/netshot-python.png)
 
 ```
 netshot/
@@ -27,7 +27,7 @@ netshot/
 │   ├── leakcheck.py      fuites de données (LeakCheck Pro API v2), onglet Leaks
 │   ├── pagecheck.py      contenu mixte, SRI, traqueurs, WAF (passif et --waf-probe)
 │   └── reputation.py     réputation des noms : résolveurs filtrants, URLhaus, VirusTotal, Safe Browsing
-├── assets/               icon.png, subdomains.txt (dictionnaire DNS), dirs.txt (dossiers courants), files.txt (fichiers sensibles)
+├── assets/               icon.png, icon-32.png (logo radar), subdomains.txt (dictionnaire DNS), dirs.txt (dossiers courants), files.txt (fichiers sensibles)
 ├── examples/             targets.example.txt
 └── screenshots/          sorties de l'interface graphique
 ```

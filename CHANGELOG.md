@@ -3,6 +3,27 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.3] - 2026-11-13
+
+Nouveau logo « radar », choisi parmi les six pistes proposées (même dessin que la version Go,
+aux couleurs de la version Python).
+
+### Modifié
+- Logo : carré arrondi en dégradé marine → indigo, trois cercles de radar, secteur de balayage
+  ambre, ligne de balayage et trois points blancs (les services trouvés).
+- `assets/icon.png` (256 px : icône de la fenêtre, logo du rapport) régénéré, et nouveau
+  `assets/icon-32.png` dessiné pour 32 px, utilisé dans l'en-tête de la fenêtre à la place de
+  l'image de 256 px réduite (plus net). Les deux sont produits par `tools/mkicon` de la version Go
+  (`go run ./tools/mkicon -variant python -out ../netshot/assets`).
+- Capture du README mise à jour.
+
+### Fichiers
+- `assets/icon.png`, `assets/icon-32.png`, `core/gui.py`, `core/__init__.py`, `README.md`,
+  `docs/netshot-python.png`.
+
+### Tests
+- Interface ouverte sous Xvfb (Tk 8.6) : logo de l'en-tête et icône de fenêtre vérifiés.
+
 ## [1.2.2] - 2026-11-13
 
 Refonte de l'interface, étape 2 : les autres onglets prennent le style de l'onglet Scan (même
