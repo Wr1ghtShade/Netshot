@@ -20,7 +20,7 @@ aux couleurs de la version Python).
   certificat ECDSA P-256 valable un an signé par une autorité interne de confiance, TLS 1.2
   (suites AEAD seulement) et 1.3, PQC, HSTS et en-têtes de sécurité : note A+. Onglet Scan
   après la capture, et capture du rapport HTML du même scan. Fichiers renommés
-  (`docs/*-scan.png`, `docs/*-rapport.png`) pour que GitHub ne montre plus l'ancienne image en cache.
+  (`docs/*-scan-v123.png`, `docs/*-rapport-v123.png`) pour que GitHub ne montre plus l'ancienne image en cache.
 
 ### Fichiers
 - `assets/icon.png`, `assets/icon-32.png`, `core/gui.py`, `core/__init__.py`, `README.md`,

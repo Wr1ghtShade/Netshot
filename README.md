@@ -7,9 +7,9 @@ priorisation KEV / EPSS).
 Version Python ; même fonctionnement que la version Go (projet `netshot-go`).
 `keys.json` (clés API) et `settings.json` (thème) ne sont jamais versionnés (`.gitignore`).
 
-![NetShot (Python) : onglet Scan après la capture d'un intranet de démonstration](docs/netshot-python-scan.png)
+![NetShot (Python) : onglet Scan après la capture d'un intranet de démonstration](docs/netshot-python-scan-v123.png)
 
-![NetShot (Python) : rapport HTML du même scan (pages sensibles, technologies, TLS, captures)](docs/netshot-python-rapport.png)
+![NetShot (Python) : rapport HTML du même scan (pages sensibles, technologies, TLS, captures)](docs/netshot-python-rapport-v123.png)
 
 ```
 netshot/
