@@ -15,7 +15,9 @@ aux couleurs de la version Python).
   `assets/icon-32.png` dessiné pour 32 px, utilisé dans l'en-tête de la fenêtre à la place de
   l'image de 256 px réduite (plus net). Les deux sont produits par `tools/mkicon` de la version Go
   (`go run ./tools/mkicon -variant python -out ../netshot/assets`).
-- Capture du README mise à jour.
+- Captures du README refaites sur un intranet de démonstration (page de connexion en http et
+  https) : onglet Scan après la capture, et nouvelle capture du rapport HTML du même scan
+  (`docs/netshot-python-rapport.png`).
 
 ### Fichiers
 - `assets/icon.png`, `assets/icon-32.png`, `core/gui.py`, `core/__init__.py`, `README.md`,
