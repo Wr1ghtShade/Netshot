@@ -3,6 +3,27 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.2] - 2026-11-13
+
+Refonte de l'interface, étape 2 : les autres onglets prennent le style de l'onglet Scan (même
+étape que la version Go 1.2.2).
+
+### Modifié
+- Boutons principaux de tous les onglets (Rechercher, Interroger, Analyser, Enregistrer les clés)
+  en bleu plein, style `Primary.TButton` ; la classe `SoftButton` (boutons pastel) est supprimée.
+- Aides en gris via le style `Hint.TLabel` (lisible dans les deux thèmes).
+- **Clés API** : titre de section, nom des services en gras, état et lien en couleur d'accent
+  (`Link.TLabel`).
+- Statut initial de la barre d'action : « Prêt. » (le nombre d'UA est affiché à côté de la liste).
+- Capture du README mise à jour.
+
+### Fichiers
+- `core/gui.py`, `core/theme.py`, `core/__init__.py`, `README.md`, `docs/netshot-python.png`.
+
+### Tests
+- Chaque onglet ouvert sous Xvfb (Tk 8.6), thèmes clair et sombre ; scan complet lancé depuis
+  l'interface sur une page locale.
+
 ## [1.2.1] - 2026-11-13
 
 Refonte de l'interface, étape 1 : en-tête et onglet Scan, d'après la maquette validée (même

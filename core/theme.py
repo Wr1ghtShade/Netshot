@@ -190,6 +190,13 @@ class ThemeManager:
                                             ("active", d["accent_hover"])],
               foreground=[("disabled", d["muted"])])
         s.configure("Big.TButton", font=("Segoe UI", 10), padding=(14, 6))
+        s.configure("Primary.TButton", background=d["accent"], foreground="#ffffff", bordercolor=d["accent"],
+                    lightcolor=d["accent"], darkcolor=d["accent"], font=("Segoe UI", 9, "bold"), padding=(12, 3))
+        s.map("Primary.TButton", background=[("disabled", d["border"]), ("pressed", d["accent_hover"]),
+                                             ("active", d["accent_hover"])],
+              foreground=[("disabled", d["muted"])])
+        s.configure("Hint.TLabel", foreground=d["muted"])
+        s.configure("Link.TLabel", foreground=d["accent"])
         s.configure("Quit.TButton", foreground=d["danger"], font=("Segoe UI", 9, "bold"))
         s.map("Quit.TButton", background=[("active", d["danger"])], foreground=[("active", "#ffffff")])
         s.configure("Link.TButton", background=d["bg"], foreground=d["accent"], bordercolor=d["bg"],
@@ -225,12 +232,10 @@ class ThemeManager:
         return DARK_COLORS.get(str(color).lower(), color) if self.dark else color
 
     def _walk(self, widget):
-        from .gui import SoftButton, ThinProgress  # avoid a circular import at load time
+        from .gui import ThinProgress  # avoid a circular import at load time
         # widget._w, not str(widget): a ScrolledText reports the path of its outer frame
         d, dark, path = self.palette, self.dark, widget._w
-        if isinstance(widget, SoftButton):
-            widget.set_dark(dark)
-        elif isinstance(widget, ThinProgress):
+        if isinstance(widget, ThinProgress):
             widget.set_colors(d["border"], d["accent"])
         elif isinstance(widget, tk.Text):
             bg0 = self._keep((path, "bg"), widget.cget("background"))

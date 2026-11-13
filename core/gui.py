@@ -62,50 +62,6 @@ LEAK_DATA_COLS = {"email": ("E-mail", 220), "username": ("Identifiant", 120), "p
 LEAK_MASK = "••••••••"  # fixed length: the length of a password is information too
 
 
-# Soft colours for the main action buttons: (background, hover, text)
-SOFT_COLORS = {"primary": ("#dbeafe", "#bfdbfe", "#1e3a8a"),   # soft blue
-               "danger": ("#fee2e2", "#fecaca", "#991b1b")}    # soft red
-SOFT_DISABLED = ("#f1f5f9", "#94a3b8")                         # background, text
-SOFT_COLORS_DARK = {"primary": ("#1e3a5f", "#26507f", "#bfdbfe"),
-                    "danger": ("#4c1d1d", "#652626", "#fecaca")}
-SOFT_DISABLED_DARK = ("#2a2d33", "#6b7280")
-
-
-class SoftButton(tk.Button):
-    """Flat tk.Button in a soft colour, lighter on hover, greyed out when disabled.
-    Same API as the ttk buttons it replaces: configure(state=..., text=...)."""
-
-    def __init__(self, parent, kind="primary", **kw):
-        self._kind, self._disabled = kind, SOFT_DISABLED
-        self._bg, self._hover, fg = SOFT_COLORS[kind]
-        super().__init__(parent, fg=fg, activeforeground=fg, activebackground=self._hover,
-                         disabledforeground=SOFT_DISABLED[1], relief="flat", bd=0, highlightthickness=0,
-                         padx=14, pady=4, font=("Segoe UI", 9, "bold"), **kw)
-        self._paint()
-        self.bind("<Enter>", lambda e: self._paint(hover=True))
-        self.bind("<Leave>", lambda e: self._paint())
-
-    def _paint(self, hover=False):
-        off = str(self["state"]) == "disabled"
-        tk.Button.configure(self, bg=self._disabled[0] if off else (self._hover if hover else self._bg),
-                            cursor="arrow" if off else "hand2")
-
-    def set_dark(self, dark):
-        self._bg, self._hover, fg = (SOFT_COLORS_DARK if dark else SOFT_COLORS)[self._kind]
-        self._disabled = SOFT_DISABLED_DARK if dark else SOFT_DISABLED
-        tk.Button.configure(self, fg=fg, activeforeground=fg, activebackground=self._hover,
-                            disabledforeground=self._disabled[1])
-        self._paint()
-
-    def configure(self, cnf=None, **kw):
-        result = super().configure(cnf, **kw)
-        if "state" in kw or (isinstance(cnf, dict) and "state" in cnf):
-            self._paint()
-        return result
-
-    config = configure
-
-
 class ThinProgress(tk.Canvas):
     """6 px progress bar (a ttk one cannot be that thin in the clam theme). Same calls as the
     ttk.Progressbar it replaces: configure(maximum=..., value=...)."""
@@ -416,7 +372,7 @@ class NetshotApp:
         self.stop_btn.grid(row=0, column=1, rowspan=2, sticky="ns", padx=8)
         self.progress = ThinProgress(actions)
         self.progress.grid(row=0, column=2, sticky="ew", padx=(4, 8), pady=(10, 2))
-        self.status = tk.StringVar(value="Prêt. Aucun UA sélectionné = UA du navigateur.")
+        self.status = tk.StringVar(value="Prêt.")
         ttk.Label(actions, textvariable=self.status, style="Muted.TLabel").grid(row=1, column=2, sticky="w", padx=(4, 8))
         self.folder_btn = ttk.Button(actions, text="Ouvrir le dossier", command=self.open_folder, state="disabled")
         self.folder_btn.grid(row=0, column=3, rowspan=2, sticky="ns")
@@ -432,7 +388,7 @@ class NetshotApp:
         ttk.Label(tab, text="Domaines :").grid(row=0, column=0, sticky="w")
         self.ct_domains = tk.StringVar()
         ttk.Entry(tab, textvariable=self.ct_domains).grid(row=0, column=1, sticky="ew", padx=4)
-        self.ct_btn = SoftButton(tab, text="Rechercher", command=self.ct_search)
+        self.ct_btn = ttk.Button(tab, style="Primary.TButton", text="Rechercher", command=self.ct_search)
         self.ct_btn.grid(row=0, column=2)
         # Source checkboxes: keyed sources without a key are disabled (see refresh_sources)
         checks = ttk.Frame(tab)
@@ -450,7 +406,7 @@ class NetshotApp:
         self.ct_private = tk.BooleanVar(value=False)
         ttk.Checkbutton(filters, text="seulement les noms qui résolvent", variable=self.ct_resolve).pack(side="left", padx=(0, 12))
         ttk.Checkbutton(filters, text="seulement IP privées", variable=self.ct_private).pack(side="left")
-        ttk.Label(tab, foreground="#6b7280", text="Les sources marquées (clé) demandent une clé gratuite "
+        ttk.Label(tab, style="Hint.TLabel", text="Les sources marquées (clé) demandent une clé gratuite "
                   "(onglet Clés API). Les noms trouvés sont ajoutés aux cibles de l'onglet Scan.").grid(
             row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
         self.ct_title = tk.StringVar()
@@ -472,9 +428,9 @@ class NetshotApp:
         ttk.Label(tab, text="Serveur :").grid(row=0, column=2, sticky="w", padx=(8, 0))
         self.dns_server = tk.StringVar()
         ttk.Entry(tab, textvariable=self.dns_server, width=18).grid(row=0, column=3, padx=4)
-        self.dns_btn = SoftButton(tab, text="Interroger", command=self.dns_run)
+        self.dns_btn = ttk.Button(tab, style="Primary.TButton", text="Interroger", command=self.dns_run)
         self.dns_btn.grid(row=0, column=4)
-        ttk.Label(tab, foreground="#6b7280", wraplength=1050, text="Serveur vide = résolveurs du système. "
+        ttk.Label(tab, style="Hint.TLabel", wraplength=1050, text="Serveur vide = résolveurs du système. "
                   "Une requête ANY est tentée, mais la plupart des serveurs la refusent (RFC 8482) : chaque type "
                   "est aussi interrogé un par un (A, AAAA, NS, SOA, MX, TXT, CAA, DS, DNSKEY, HTTPS, DMARC, "
                   "MTA-STS, SRV Active Directory et Microsoft 365…).").grid(row=1, column=0, columnspan=5, sticky="w", pady=(6, 0))
@@ -545,9 +501,9 @@ class NetshotApp:
         entry = ttk.Entry(tab, textvariable=self.whois_query)
         entry.grid(row=0, column=1, sticky="ew", padx=4)
         entry.bind("<Return>", lambda e: self.whois_run())
-        self.whois_btn = SoftButton(tab, text="Interroger", command=self.whois_run)
+        self.whois_btn = ttk.Button(tab, style="Primary.TButton", text="Interroger", command=self.whois_run)
         self.whois_btn.grid(row=0, column=2)
-        ttk.Label(tab, foreground="#6b7280", wraplength=1050, text="RDAP (registre officiel, via HTTPS) pour le "
+        ttk.Label(tab, style="Hint.TLabel", wraplength=1050, text="RDAP (registre officiel, via HTTPS) pour le "
                   "tableau et les constats, WHOIS port 43 pour le texte brut (souvent filtré en entreprise). "
                   "Un sous-domaine est cherché sous son domaine enregistré. Exemples : exemple.fr, 8.8.8.8, AS3215.").grid(
             row=1, column=0, columnspan=3, sticky="w", pady=(6, 0))
@@ -605,14 +561,14 @@ class NetshotApp:
         ttk.Label(tab, text="Limite :").grid(row=0, column=4, sticky="w", padx=(8, 0))
         self.leak_limit = tk.StringVar(value="100")
         ttk.Spinbox(tab, from_=1, to=1000, increment=100, textvariable=self.leak_limit, width=6).grid(row=0, column=5, padx=4)
-        self.leak_btn = SoftButton(tab, text="Rechercher", command=self.leak_run)
+        self.leak_btn = ttk.Button(tab, style="Primary.TButton", text="Rechercher", command=self.leak_run)
         self.leak_btn.grid(row=0, column=6)
         opts = ttk.Frame(tab)
         opts.grid(row=1, column=0, columnspan=7, sticky="w", pady=(6, 0))
         self.leak_show_pw = tk.BooleanVar(value=False)
         ttk.Checkbutton(opts, text="Afficher les mots de passe", variable=self.leak_show_pw,
                         command=self.leak_render).pack(side="left")
-        ttk.Label(opts, foreground="#6b7280", text="   LeakCheck Pro API v2 (clé dans l'onglet Clés API). "
+        ttk.Label(opts, style="Hint.TLabel", text="   LeakCheck Pro API v2 (clé dans l'onglet Clés API). "
                   "Type auto : e-mail, identifiant, téléphone, hash. Domaine : choisir le type domain. "
                   "Seule la valeur recherchée est envoyée à LeakCheck.").pack(side="left")
         head = ttk.Frame(tab)
@@ -638,22 +594,24 @@ class NetshotApp:
         tab = ttk.Frame(self.nb, padding=10)
         self.nb.add(tab, text=TAB_KEYS)
         tab.columnconfigure(1, weight=1)
-        ttk.Label(tab, text="Champ vide = garder la clé actuelle, « - » = l'effacer.").grid(
-            row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+        head = ttk.Frame(tab)
+        head.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+        ttk.Label(head, text="Clés API des services gratuits", style="Section.TLabel").pack(anchor="w")
+        ttk.Label(head, text="Champ vide = garder la clé actuelle, « - » = l'effacer.", style="Hint.TLabel").pack(anchor="w")
         self.key_entries, self.key_states = {}, {}
         for i, (name, label, url) in enumerate(sources.KEY_SOURCES, start=1):
-            ttk.Label(tab, text=label).grid(row=i, column=0, sticky="w", padx=(0, 8), pady=2)
+            ttk.Label(tab, text=label, font=("Segoe UI", 9, "bold")).grid(row=i, column=0, sticky="w", padx=(0, 8), pady=2)
             var = tk.StringVar()
             ttk.Entry(tab, textvariable=var, show="•").grid(row=i, column=1, sticky="ew", pady=2)
             state = tk.StringVar()
-            link = ttk.Label(tab, textvariable=state, foreground="#2563eb", cursor="hand2")
+            link = ttk.Label(tab, textvariable=state, style="Link.TLabel", cursor="hand2")
             link.grid(row=i, column=2, sticky="w", padx=(8, 0))
             link.bind("<Button-1>", lambda e, u=url: webbrowser.open(u))
             self.key_entries[name], self.key_states[name] = var, state
         row = len(self.key_entries) + 1
-        SoftButton(tab, text="Enregistrer les clés", command=self.save_keys).grid(row=row, column=0, sticky="w", pady=(10, 0))
+        ttk.Button(tab, style="Primary.TButton", text="Enregistrer les clés", command=self.save_keys).grid(row=row, column=0, sticky="w", pady=(10, 0))
         ttk.Label(tab, text=f"Stockées dans {sources.keys_path()}",
-                  foreground="#6b7280").grid(row=row, column=1, columnspan=2, sticky="w", pady=(10, 0))
+                  style="Hint.TLabel").grid(row=row, column=1, columnspan=2, sticky="w", pady=(10, 0))
         return tab
 
     def _build_certs_tab(self):
@@ -672,7 +630,7 @@ class NetshotApp:
         side = ttk.Frame(top)
         side.grid(row=0, column=1, sticky="n", padx=(8, 0))
         ttk.Button(side, text="Services https du dernier scan", command=self.tls_from_last).pack(fill="x")
-        self.tls_btn = SoftButton(side, text="Analyser", command=self.tls_run)
+        self.tls_btn = ttk.Button(side, style="Primary.TButton", text="Analyser", command=self.tls_run)
         self.tls_btn.pack(fill="x", pady=(6, 0))
         self._tool_buttons(side, lambda: self.tls_targets.get("1.0", "end"),
                            lambda: self.tls_targets.delete("1.0", "end")).pack(fill="x", pady=(6, 0))

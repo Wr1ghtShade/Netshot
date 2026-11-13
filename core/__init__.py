@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-__version__ = "1.2.1"  # keep in step with CHANGELOG.md
+__version__ = "1.2.2"  # keep in step with CHANGELOG.md
 
 # Application folder (holds keys.json, assets/, screenshots/)
 ROOT = Path(__file__).resolve().parent.parent
