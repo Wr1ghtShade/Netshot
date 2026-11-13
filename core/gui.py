@@ -25,7 +25,7 @@ from types import SimpleNamespace
 from .webinfo import dir_words
 from .scope import parse_proxy, read_exclusions
 from .recon import file_rules
-from . import ROOT as HERE, ASSETS
+from . import ROOT as HERE, ASSETS, __version__
 from . import dns as netshot_dns
 from . import whois as netshot_whois
 from . import leakcheck
@@ -114,7 +114,7 @@ class NetshotApp:
         self.worker = None
         self.report = None
 
-        root.title("NetShot - captures réseau")
+        root.title(f"NetShot {__version__} - captures réseau")
         # Centered on the screen; smaller than 1180x880 on a small screen (taskbar kept visible)
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         w, h = min(1180, sw - 40), min(880, sh - 80)
@@ -141,6 +141,7 @@ class NetshotApp:
             self.logo_small = self.icon.subsample(8)
             ttk.Label(header, image=self.logo_small).pack(side="left", padx=(0, 6))
         ttk.Label(header, text="NetShot", font=("Segoe UI", 14, "bold")).pack(side="left")
+        ttk.Label(header, text=f"v{__version__}", foreground="#888").pack(side="left", padx=(6, 0), pady=(4, 0))
         tk.Button(header, text="Quitter", command=self.on_close, bg="#dc2626", fg="white",
                   activebackground="#b91c1c", activeforeground="white", relief="flat",
                   font=("Segoe UI", 9, "bold"), padx=14, pady=2, cursor="hand2").pack(side="right")

@@ -9,6 +9,7 @@ import zipfile
 from datetime import datetime
 from xml.sax.saxutils import escape
 
+from . import __version__
 from .recon import DEFAULT_CREDS
 from .webinfo import TAGS, tech_label
 
@@ -22,6 +23,7 @@ def _clean(r):
 
 def write_json(path, results, exposures=None, tls_results=None, inventory=None, groups=None, takeovers=None):
     data = {
+        "netshot_version": __version__,
         "generated": datetime.now().isoformat(timespec="seconds"),
         "services": [_clean(r) for r in results],
         "technologies": inventory or [],

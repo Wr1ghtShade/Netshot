@@ -344,6 +344,7 @@ Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par d
 | `-d`, `--delay` | secondes minimum entre deux captures | `0` |
 | `-u`, `--ua` | user agent (répétable) : nom, `browsers`, `bots`, `all` ou chaîne libre | UA Chromium |
 | `--list-ua` | affiche les UA intégrés | - |
+| `-V`, `--version` | affiche la version de NetShot | - |
 | `--ct DOMAINE` | ajoute les sous-domaines trouvés par les sources passives (répétable) | - |
 | `--ct-sources` | `default`, `all`, ou une liste (voir `--list-sources`) | `default` |
 | `--key SOURCE=CLÉ` | clé API d'un service (répétable) | fichier de clés |

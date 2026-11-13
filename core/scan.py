@@ -49,7 +49,7 @@ import urllib.parse
 from datetime import datetime
 from pathlib import Path
 
-from . import ASSETS, sources
+from . import ASSETS, __version__, sources
 from .enrich import EXPOSURE_CSS, enrich, exposure_line, exposure_table, write_exposure_csv
 from .dns import dns_lookup, format_dig
 from .whois import format_whois, whois_lookup
@@ -607,7 +607,7 @@ body.only section.same{{display:none}}
 h1.brand{{display:flex;align-items:center;gap:10px;margin:0 0 4px}}
 h1.brand img{{width:36px;height:36px}}
 </style></head><body>
-<h1 class="brand">{f'<img src="{logo}" alt="">' if logo else ""}NetShot</h1><p>{len(groups)} services, {len(results)} captures - {datetime.now():%Y-%m-%d %H:%M}</p>
+<h1 class="brand">{f'<img src="{logo}" alt="">' if logo else ""}NetShot</h1><p>v{__version__} - {len(groups)} services, {len(results)} captures - {datetime.now():%Y-%m-%d %H:%M}</p>
 {takeover_section(takeovers or [])}
 {files_section(results)}
 {sensitive_section(results)}
@@ -742,6 +742,7 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
 
 def main():
     ap = argparse.ArgumentParser(description="Screenshot web services on IPs / subnets.")
+    ap.add_argument("-V", "--version", action="version", version=f"NetShot {__version__}")
     ap.add_argument("targets", nargs="*", help="IP, CIDR (10.0.0.0/24), AS number (AS3215) or hostname")
     ap.add_argument("-f", "--file", action="append", default=[],
                     help="file with one target per line, or a CSV export (AD, ADCS, CMDB) (repeatable)")
