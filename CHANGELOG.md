@@ -3,6 +3,25 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.4] - 2026-11-14
+
+### Modifié
+- Bas de la fenêtre : le journal et la dernière capture ne sont plus deux onglets
+  (`ttk.Notebook`). Ce sont deux cadres côte à côte sur une ligne, en deux colonnes égales
+  (« JOURNAL » à gauche, « DERNIÈRE CAPTURE » à droite), visibles en permanence sur tous les
+  onglets sauf Whois. La marque « ● » de nouvelle capture disparaît, devenue inutile.
+- Le texte au-dessus de l'aperçu (URL, statut, titre, UA) revient à la ligne avant le bouton
+  Effacer, quelle que soit la largeur de la colonne.
+- Captures du README refaites (`docs/netshot-python-scan-v124.png`,
+  `docs/netshot-python-rapport-v124.png`).
+
+### Fichiers
+- `core/gui.py` (bas de la fenêtre, `layout_for_tab`), `core/__init__.py`, `README.md`, `docs/`.
+
+### Tests
+- Interface lancée sous Xvfb (Tk 8.6), onglets Scan et DNS, scan complet de l'intranet de
+  démonstration.
+
 ## [1.2.3] - 2026-11-13
 
 Nouveau logo « radar », choisi parmi les six pistes proposées (même dessin que la version Go,

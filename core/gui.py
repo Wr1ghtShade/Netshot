@@ -149,12 +149,15 @@ class NetshotApp:
         self._build_leaks_tab()
         self.keys_tab = self._build_keys_tab()
 
-        # Journal and last capture: one panel with two tabs (the capture tab only on the Scan tab)
-        bottom = ttk.Notebook(outer)
+        # Bottom: one row, two columns, both always visible: journal (left), last capture (right)
+        bottom = ttk.Frame(outer)
         bottom.grid(row=2, column=0, sticky="nsew")
+        bottom.columnconfigure(0, weight=1, uniform="bottom")
+        bottom.columnconfigure(1, weight=1, uniform="bottom")
+        bottom.rowconfigure(0, weight=1)
         self.bottom, self.outer = bottom, outer
-        log_box = ttk.Frame(bottom, padding=4)
-        bottom.add(log_box, text="Journal")
+        log_box = ttk.LabelFrame(bottom, text="JOURNAL", padding=(6, 2, 6, 6))
+        log_box.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
         # Reset of the log also clears the last capture
         self._tool_buttons(log_box, lambda: self.log.get("1.0", "end"), self.reset_bottom).pack(anchor="e")
         self.log = scrolledtext.ScrolledText(log_box, height=5, width=50, font=("Consolas", 9), state="disabled",
@@ -162,14 +165,17 @@ class NetshotApp:
         self.log.is_log = True  # dark console in both themes (theme.py)
         self.log.tag_configure("err", foreground="#f87171")
         self.log.pack(fill="both", expand=True)
-        preview = ttk.Frame(bottom, padding=4)
-        bottom.add(preview, text="Dernière capture")
+        preview = ttk.LabelFrame(bottom, text="DERNIÈRE CAPTURE", padding=(6, 2, 6, 6))
+        preview.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
         self.preview_box = preview
         self.preview_info = tk.StringVar(value="-")
         info_row = ttk.Frame(preview)
         info_row.pack(fill="x")
         ttk.Button(info_row, text="Effacer", width=8, command=self.reset_preview).pack(side="right")
-        ttk.Label(info_row, textvariable=self.preview_info, wraplength=700).pack(side="left", anchor="w")
+        info = ttk.Label(info_row, textvariable=self.preview_info, wraplength=380)
+        info.pack(side="left", anchor="w")
+        # The text wraps before the Effacer button, whatever the width of the column
+        info_row.bind("<Configure>", lambda e: info.configure(wraplength=max(120, e.width - 110)))
         # Fixed-size area: the image is scaled to it, so it never pushes the window
         self.preview_area = ttk.Frame(preview)
         self.preview_area.pack(fill="both", expand=True)
@@ -179,8 +185,6 @@ class NetshotApp:
         self.preview.bind("<Button-1>", lambda e: self.preview_path and self.open_path(self.preview_path))
         self.refresh_sources(first=True)
         self.nb.bind("<<NotebookTabChanged>>", lambda e: self.layout_for_tab())
-        self.bottom.bind("<<NotebookTabChanged>>", lambda e: self.bottom.tab(self.preview_box, text="Dernière capture")
-                         if self.bottom.index("current") == self.bottom.index(self.preview_box) else None)
         self.update_targets_count()
         theme.themed_scrollbars(root)
         self.theme = theme.ThemeManager(root)
@@ -477,8 +481,8 @@ class NetshotApp:
         self.set_theme("light" if self.theme.dark else "dark")
 
     def layout_for_tab(self):
-        """Whois uses the whole window height (no journal); Scan shows the journal and the last capture
-        as two tabs; every other tab shows the journal alone."""
+        """Whois uses the whole window height (no journal); every other tab shows the journal and the
+        last capture side by side."""
         tab = self.nb.tab(self.nb.select(), "text")
         if tab == TAB_WHOIS:
             self.bottom.grid_remove()
@@ -488,11 +492,6 @@ class NetshotApp:
         scan = self.nb.select() == str(self.scan_tab)
         self.outer.rowconfigure(1, weight=5 if scan else 6)
         self.outer.rowconfigure(2, weight=1)
-        if scan:
-            self.bottom.add(self.preview_box)  # shows the capture tab again (it stays in place)
-        else:
-            self.bottom.select(0)
-            self.bottom.hide(self.preview_box)
 
     def _build_whois_tab(self):
         tab = ttk.Frame(self.nb, padding=10)
@@ -995,8 +994,6 @@ class NetshotApp:
         self.preview.configure(image=self.preview_img, text="")
         self.preview_path = Path(path)
         self.preview_info.set(f"{url}  [{status}]  {title}  - UA : {ua_name}")
-        if self.bottom.index("current") != self.bottom.index(self.preview_box):
-            self.bottom.tab(self.preview_box, text="Dernière capture  \u25cf")
 
     # --- Passive sources and API keys ----------------------------------------
 

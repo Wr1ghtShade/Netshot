@@ -7,9 +7,9 @@ priorisation KEV / EPSS).
 Version Python ; même fonctionnement que la version Go (projet `netshot-go`).
 `keys.json` (clés API) et `settings.json` (thème) ne sont jamais versionnés (`.gitignore`).
 
-![NetShot (Python) : onglet Scan après la capture d'un intranet de démonstration](docs/netshot-python-scan-v123.png)
+![NetShot (Python) : onglet Scan après la capture d'un intranet de démonstration](docs/netshot-python-scan-v124.png)
 
-![NetShot (Python) : rapport HTML du même scan (pages sensibles, technologies, TLS, captures)](docs/netshot-python-rapport-v123.png)
+![NetShot (Python) : rapport HTML du même scan (pages sensibles, technologies, TLS, captures)](docs/netshot-python-rapport-v124.png)
 
 ```
 netshot/
@@ -352,7 +352,8 @@ Dans l'ordre du déroulé d'une reconnaissance :
 - **Périmètre et proxy** (replié, avec un résumé) : voir « Périmètre et proxy ».
 - **Barre d'action**, toujours visible en bas de l'onglet : Lancer le scan, Arrêter, progression, Ouvrir le
   dossier, Ouvrir le rapport.
-- **Journal / Dernière capture** : deux onglets sous la barre d'action ; un point signale une nouvelle capture.
+- **Journal et Dernière capture** : en bas de la fenêtre, côte à côte (journal à gauche, capture à droite),
+  toujours visibles sur tous les onglets sauf Whois.
   Clic sur l'aperçu pour ouvrir l'image, **Effacer** pour le vider (le fichier PNG reste dans le dossier).
 
 Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par défaut `netshot\screenshots\`).
