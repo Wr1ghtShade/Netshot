@@ -593,6 +593,7 @@ def write_reports(results, outdir, exposures=None, tls_results=None, inventory=N
             )
         badge = (f'<span class="diff">differs: {html.escape(", ".join(diffs))}</span>' if diffs else "")
         alldup = " alldup" if all(r.get("dup") for r in group) else ""
+        alldup += " multi" if len(group) > 1 else ""
         sections.append(
             f'<section class="{"has-diff" if diffs else "same"}{alldup}"><h2>{html.escape(host)}:{port} {badge}</h2>'
             f'{"".join(exposure_line(x) for x in by_host.get(host, []))}'
@@ -617,6 +618,15 @@ h2{{font-size:16px;margin:24px 0 8px}}
 .ua{{background:#246;color:#fff;border-radius:3px;padding:1px 6px;font-size:12px}}
 .size{{color:#777}}
 .diff{{background:#c60;color:#fff;border-radius:3px;padding:2px 8px;font-size:12px;font-weight:normal}}
+/* Captures: one tile per host:port, several tiles per row; a service captured with several user agents takes a full row */
+.shots{{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px 16px;align-items:start;margin-top:12px}}
+.shots>section{{min-width:0}}
+.shots>section.multi{{grid-column:1/-1}}
+.shots>section:not(.multi)>.grid{{grid-template-columns:1fr}}
+/* Same height for every tile: the capture is cropped from the top (click to see it whole) */
+.shots .card img{{aspect-ratio:16/9;object-fit:cover;object-position:left top}}
+.shots h2{{font-size:15px;margin:0 0 6px;word-break:break-all}}
+.shots .exp{{word-break:break-word}}
 body.only section.same{{display:none}}
 {EXPOSURE_CSS}
 {TLS_CSS}
@@ -642,7 +652,7 @@ h1.brand img{{width:36px;height:36px}}
 {groups_section(visual_groups or [])}
 {filter_bar(results, inventory)}
 {filter_box}
-{''.join(sections)}
+<div class="shots">{''.join(sections)}</div>
 <script>
 var c=document.getElementById('only');
 if(c)c.onchange=function(){{document.body.classList.toggle('only',c.checked)}};

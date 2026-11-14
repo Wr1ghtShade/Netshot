@@ -3,6 +3,32 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.5] - 2026-11-14
+
+### Modifié
+- **Rapport HTML** : les captures ne s'empilent plus une par ligne. Chaque service (hôte:port)
+  devient une vignette, et les vignettes remplissent la largeur de la page en grille (4 par ligne
+  en 1440 px, moins sur un écran étroit). Un service capturé avec plusieurs user agents garde une
+  ligne entière pour comparer ses captures côte à côte. Toutes les vignettes ont la même hauteur
+  (capture en 16:9, recadrée depuis le haut ; clic pour l'image entière). Les filtres, la
+  recherche et « masquer les doublons » fonctionnent comme avant.
+- **Dossier d'un scan lancé depuis l'interface** : `scan_<domaine>_<date>` au lieu de
+  `scan_<date>`, par exemple `scan_guifort.ovh_20261114_095743`. Le domaine est celui que partagent
+  tous les noms de la liste (suffixes comme `.co.uk` ou `.gouv.fr` pris en compte). Avec une seule
+  cible, c'est la cible elle-même (`scan_10.0.0.0-24_…`, `scan_AS3215_…`). Avec des cibles sans
+  domaine commun, le nom reste `scan_<date>`. En ligne de commande, `-o` donne toujours le dossier.
+- Captures du README refaites (`docs/netshot-python-scan-v125.png`,
+  `docs/netshot-python-rapport-v125.png`).
+
+### Fichiers
+- `core/scan.py` (grille des vignettes), `core/gui.py` (`scan_folder_name`, `scan_label`,
+  `registrable_domain`), `core/__init__.py`, `README.md`, `docs/`.
+
+### Tests
+- Mêmes 7 cas de nommage que la version Go.
+- Rapport généré et ouvert dans Chromium headless ; scan lancé depuis l'interface (Xvfb) :
+  dossier `scan_demo.lan_…` créé.
+
 ## [1.2.4] - 2026-11-14
 
 ### Modifié

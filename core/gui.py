@@ -11,8 +11,10 @@ Run:
 """
 
 import asyncio
+import ipaddress
 import os
 import queue
+import re
 import sys
 import threading
 import tkinter as tk
@@ -21,6 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 from .webinfo import dir_words
 from .scope import parse_proxy, read_exclusions
@@ -60,6 +63,50 @@ LEAK_DATA_COLS = {"email": ("E-mail", 220), "username": ("Identifiant", 120), "p
                   "zip": ("Code postal", 80), "city": ("Ville", 120), "country": ("Pays", 70),
                   "ip": ("IP", 110), "collected": ("Collecté le", 110)}
 LEAK_MASK = "••••••••"  # fixed length: the length of a password is information too
+
+
+def registrable_domain(host):
+    """Last two labels, or three under a second-level suffix of a country (example.co.uk, example.gouv.fr)."""
+    parts = host.split(".")
+    n = 3 if len(parts) >= 3 and len(parts[-1]) == 2 and parts[-2] in (
+        "co", "com", "net", "org", "gov", "gouv", "ac", "edu", "asso", "nom") else 2
+    return ".".join(parts[-n:])
+
+
+def scan_label(targets):
+    """The domain when every host name of the list belongs to the same one, the target itself when there
+    is only one (10.0.0.0-24, AS3215), else ''."""
+    items = [l.split("#", 1)[0].strip() for l in targets.splitlines()]
+    items = [i for i in items if i]
+    if not items:
+        return ""
+    domain, all_names = "", True
+    for it in items:
+        h = it.lower().rstrip(".")
+        if "://" in h:
+            h = urlsplit(h).hostname or ""
+        try:
+            ipaddress.ip_address(h)
+            is_ip = True
+        except ValueError:
+            is_ip = False
+        if is_ip or "/" in h or sources.ASN_RE.match(h) or "." not in h:
+            all_names = False
+            break
+        d = registrable_domain(h)
+        if domain and d != domain:
+            all_names = False
+            break
+        domain = d
+    label = domain if all_names else (items[0] if len(items) == 1 else "")
+    label = re.sub(r"[^A-Za-z0-9._-]", "-", label).strip("-.")
+    return label[:60]
+
+
+def scan_folder_name(targets, now):
+    """scan_<label>_<date>, or scan_<date> when the targets have no common domain."""
+    label = scan_label(targets)
+    return f"scan_{label}_{now:%Y%m%d_%H%M%S}" if label else f"scan_{now:%Y%m%d_%H%M%S}"
 
 
 class ThinProgress(tk.Canvas):
@@ -1302,8 +1349,8 @@ class NetshotApp:
                 "netshot", f"{len(hosts)} hôtes x {len(ports)} ports = {len(hosts) * len(ports)} tests.\nContinuer ?"):
             return
 
-        # One sub-folder per scan so results never overwrite each other
-        output = Path(self.outdir.get()) / f"scan_{datetime.now():%Y%m%d_%H%M%S}"
+        # One sub-folder per scan so results never overwrite each other, named after the domain
+        output = Path(self.outdir.get()) / scan_folder_name(self.targets.get("1.0", "end"), datetime.now())
         width, height = RESOLUTIONS.get(self.resolution.get(), (1920, 1080))
         args = SimpleNamespace(output=output, concurrency=concurrency, connect_timeout=connect_timeout,
                                page_timeout=page_timeout, delay=delay, user_agents=user_agents,
