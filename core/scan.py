@@ -814,10 +814,10 @@ def main():
     ap.add_argument("--no-enrich", action="store_true",
                     help="do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS), look up the "
                          "CVEs of the versions found (NVD) nor check the reputation of the host names (block "
-                         "lists, URLhaus, VirusTotal, Safe Browsing)")
+                         "lists, URLhaus)")
     ap.add_argument("--no-reputation", action="store_true",
-                    help="do not check the reputation of the host names (block lists, URLhaus, VirusTotal, "
-                         "Safe Browsing); --no-enrich turns it off too")
+                    help="do not check the reputation of the host names (block lists, URLhaus); "
+                         "--no-enrich turns it off too")
     ap.add_argument("--no-analyze", action="store_true",
                     help="do not analyse the pages (technologies, sensitive pages, security headers, "
                          "favicon hash, similar pages)")
@@ -914,7 +914,7 @@ def main():
         print("\nEnrichment of the IPs found: Shodan host API (with key, else the free InternetDB), LeakIX (key), "
               "CISA KEV, FIRST EPSS.")
         print("Reputation of the public host names: filtering DNS resolvers (Quad9, Cloudflare, OpenDNS, AdGuard), "
-              "URLhaus (key abusech), VirusTotal (key), Google Safe Browsing (key safebrowsing).")
+              "URLhaus (key abusech).")
         print("Targets: AS<number> expands to the prefixes announced by the AS (RIPEstat).")
         print(f"Keys file: {keys_path()}")
         return

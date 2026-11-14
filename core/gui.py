@@ -332,7 +332,7 @@ class NetshotApp:
         self.tls_scan = tk.BooleanVar(value=True)
         self.label_shots = tk.BooleanVar(value=True)
         option(passive, self.enrich, "Enrichir les IP et les versions", "Shodan, LeakIX, NVD, CISA KEV, EPSS")
-        option(passive, self.reputation, "Réputation des noms", "Listes de blocage, URLhaus, VirusTotal, Safe Browsing")
+        option(passive, self.reputation, "Réputation des noms", "Listes de blocage DNS, URLhaus")
         option(passive, self.tls_scan, "Analyser les certificats TLS", "Versions, suites, PQC, chaîne, HSTS")
         option(passive, self.label_shots, "Inscrire l'URL sur les captures", "Bandeau hôte:port, URL, statut, date")
 

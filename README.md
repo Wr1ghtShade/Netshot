@@ -28,7 +28,7 @@ netshot/
 │   ├── theme.py          thème clair / sombre de l'interface
 │   ├── leakcheck.py      fuites de données (LeakCheck Pro API v2), onglet Leaks
 │   ├── pagecheck.py      contenu mixte, SRI, traqueurs, WAF (passif et --waf-probe)
-│   └── reputation.py     réputation des noms : résolveurs filtrants, URLhaus, VirusTotal, Safe Browsing
+│   └── reputation.py     réputation des noms : résolveurs filtrants, URLhaus
 ├── assets/               icon.png, icon-32.png (logo radar), subdomains.txt (dictionnaire DNS), dirs.txt (dossiers courants), files.txt (fichiers sensibles)
 ├── examples/             targets.example.txt
 └── screenshots/          sorties de l'interface graphique
@@ -149,7 +149,7 @@ python netshot.py --key domscan=XXXX --key leakix=YYYY --save-keys
 Une variable `NETSHOT_KEY_<SOURCE>` (ex. `NETSHOT_KEY_DOMSCAN`) remplace la clé du fichier.
 
 Services acceptant une clé : certspotter, hackertarget, urlscan, virustotal, dnsdumpster, domscan,
-viewdns, leakix, shodan, leakcheck, nvd, abusech (URLhaus), safebrowsing (Google Safe Browsing).
+viewdns, leakix, shodan, leakcheck, nvd, abusech (URLhaus).
 
 ### 🌍 Plages d'un AS et import CSV
 
@@ -272,12 +272,10 @@ interne n'est jamais envoyé). Désactivable avec `--no-reputation` (ou `--no-en
 |---|---|---|
 | **Résolveurs DNS filtrants** | aucune | Quad9 (malware, phishing), Cloudflare 1.1.1.2 (malware), OpenDNS (phishing), AdGuard DNS (publicité, traqueurs) : un nom qui résout normalement (1.1.1.1) mais que ces résolveurs bloquent (NXDOMAIN, `0.0.0.0`, page de blocage) est signalé. Le port 53 sortant doit être ouvert ; sinon le journal l'indique |
 | **URLhaus** (abuse.ch) | `abusech`, gratuite | URL malveillantes connues sur le nom (et combien sont encore en ligne), présence dans Spamhaus DBL et SURBL |
-| **VirusTotal** | `virustotal` (déjà utilisée pour les sous-domaines) | nombre de moteurs qui classent le domaine malveillant ou suspect. API gratuite : 4 requêtes / minute, donc limité aux 8 premiers noms |
-| **Google Safe Browsing** | `safebrowsing`, gratuite | malware, hameçonnage, logiciel indésirable, sur les URL capturées |
 
-Niveau : **critique** (Safe Browsing, URL URLhaus en ligne, au moins 3 moteurs VirusTotal), **haute**
-(bloqué par un résolveur de sécurité, connu d'URLhaus, 1 ou 2 moteurs), **moyenne** (seulement
-suspect pour VirusTotal), **info** (bloqué seulement par AdGuard, donc publicité ou traqueur).
+Niveau : **critique** (URL malveillante encore en ligne selon URLhaus), **haute** (bloqué par un
+résolveur de sécurité, ou nom connu d'URLhaus), **info** (bloqué seulement par AdGuard, donc
+publicité ou traqueur). Sans clé `abusech`, seuls les résolveurs filtrants sont interrogés.
 Section « Réputation » en tête du rapport, `reputation.csv`, onglet « Réputation » de `results.xlsx`.
 
 ### 🔬 Analyse des pages

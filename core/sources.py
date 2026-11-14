@@ -40,7 +40,6 @@ KEY_SOURCES = [
     ("leakcheck", "LeakCheck", "https://leakcheck.io/"),
     ("nvd", "NVD (NIST)", "https://nvd.nist.gov/developers/request-an-api-key"),
     ("abusech", "abuse.ch (URLhaus)", "https://auth.abuse.ch/"),
-    ("safebrowsing", "Google Safe Browsing", "https://developers.google.com/safe-browsing/v4/get-started"),
 ]
 
 

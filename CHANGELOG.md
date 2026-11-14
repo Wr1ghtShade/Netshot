@@ -3,6 +3,31 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.6] - 2026-11-14
+
+### Retiré
+- **Réputation des noms** : VirusTotal et Google Safe Browsing ne sont plus interrogés. La
+  vérification repose sur les résolveurs DNS filtrants (Quad9, Cloudflare 1.1.1.2, OpenDNS,
+  AdGuard, sans clé) et sur URLhaus (clé `abusech`). Raisons : l'API publique VirusTotal interdit
+  l'usage commercial (audits facturés) et ralentissait le scan (15 s entre deux noms, 8 noms max) ;
+  Safe Browsing demandait un projet Google Cloud pour peu de gain par rapport à URLhaus.
+- Clé `safebrowsing` retirée de l'onglet Clés et de la liste des services acceptant une clé (une
+  valeur déjà présente dans `keys.json` est simplement ignorée).
+- Colonnes `virustotal`, `vt_malicious` et `safe_browsing` retirées de `reputation.csv` ; colonnes
+  « VirusTotal » et « Safe Browsing » retirées de l'onglet « Réputation » de `results.xlsx` ; champs
+  correspondants retirés du JSON.
+
+### Modifié
+- Niveaux de réputation : **critique** = URL malveillante encore en ligne selon URLhaus ; **haute** =
+  bloqué par un résolveur de sécurité ou nom connu d'URLhaus ; **info** = bloqué seulement par
+  AdGuard. Le niveau « moyenne » (suspect VirusTotal) n'est plus produit.
+- Le journal indique « URLhaus ignoré (pas de clé abusech) » quand la clé manque.
+- Libellés mis à jour : case « Réputation des noms » (« Listes de blocage DNS, URLhaus »), aide de
+  `--no-reputation`, README.
+- La clé `virustotal` reste utilisée par la source de sous-domaines VirusTotal (inchangée, optionnelle).
+
+Fichiers : `core/reputation.py`, `core/export.py`, `core/sources.py`, `core/scan.py`, `core/gui.py`, README, CHANGELOG.
+
 ## [1.2.5] - 2026-11-14
 
 ### Modifié
