@@ -174,9 +174,10 @@ def build_sheets(results, exposures=None, inventory=None, takeovers=None, reputa
         sheets.append(("WAF, SRI, traqueurs", ["URL", "WAF / CDN (passif)", "Test WAF actif", "Contenu mixte",
                                                "Sans SRI", "Traqueurs", "Hôtes tiers"], pc))
     if reputation:
-        sheets.append(("Réputation", ["Niveau", "Nom", "Bloqué par", "URLhaus", "Erreurs"],
-                       [[x["level"], x["host"], ", ".join(x["blocked_by"]), x["urlhaus"],
-                         "; ".join(x["errors"])] for x in reputation]))
+        sheets.append(("Réputation", ["Niveau", "Nom / IP", "Bloqué par", "URLhaus", "Criminal IP", "Noms de l'IP",
+                                       "Erreurs"],
+                       [[x["level"], x["host"], ", ".join(x["blocked_by"]), x["urlhaus"], x.get("criminalip", ""),
+                         ", ".join(x.get("names") or []), "; ".join(x["errors"])] for x in reputation]))
     files = [[f["severity"], f["url"], f["size"]] for r in results for f in r.get("files_found") or []]
     if files:
         sheets.append(("Fichiers exposés", ["Gravité", "URL", "Octets lus"], files))

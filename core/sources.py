@@ -40,6 +40,7 @@ KEY_SOURCES = [
     ("leakcheck", "LeakCheck", "https://leakcheck.io/"),
     ("nvd", "NVD (NIST)", "https://nvd.nist.gov/developers/request-an-api-key"),
     ("abusech", "abuse.ch (URLhaus)", "https://auth.abuse.ch/"),
+    ("criminalip", "Criminal IP", "https://www.criminalip.io/mypage/information"),
 ]
 
 
@@ -456,6 +457,14 @@ def clean_name(name, domain):
     if name != domain and not name.endswith("." + domain):
         return None
     return name
+
+
+def registrable_domain(host):
+    """Last two labels, or three under a second-level suffix of a country (example.co.uk, example.gouv.fr)."""
+    parts = host.split(".")
+    n = 3 if len(parts) >= 3 and len(parts[-1]) == 2 and parts[-2] in (
+        "co", "com", "net", "org", "gov", "gouv", "ac", "edu", "asso", "nom") else 2
+    return ".".join(parts[-n:])
 
 
 def is_internal_ip(ip):

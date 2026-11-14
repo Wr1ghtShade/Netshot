@@ -61,6 +61,7 @@ from .webinfo import (TAGS, WEB_CSS, card_extras, detect_tech, dir_words, probe_
 from .enrich import vuln_badges
 from .export import build_sheets, write_json, write_xlsx
 from .pagecheck import PAGE_RESOURCES_JS, analyze_resources, detect_waf, page_checks_section, page_issues, probe_waf
+from .criminalip import DEFAULT_DOMAINS, DEFAULT_IPS
 from .reputation import check_reputation, reputation_section, write_reputation_csv
 from .recon import (DEFAULT_CREDS, PORT_PRESETS, RECON_CSS, ScriptCollector, analyze_js, banner_display,
                     banners_section, check_takeover, file_rules, files_section, grab_banner, js_section,
@@ -732,7 +733,9 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
     reputation = None
     if getattr(args, "reputation", getattr(args, "enrich", False)) and results and not (stop and stop.is_set()):
         reputation = await asyncio.to_thread(check_reputation, results, exposures,
-                                             getattr(args, "keys", None) or {}, log, stop)
+                                             getattr(args, "keys", None) or {}, log, stop,
+                                             max(0, getattr(args, "criminalip_ips", DEFAULT_IPS)),
+                                             max(0, getattr(args, "criminalip_domains", DEFAULT_DOMAINS)))
         write_reputation_csv(reputation, args.output / "reputation.csv")
     tls_results = None
     if getattr(args, "tls", False) and results and not (stop and stop.is_set()):
@@ -814,9 +817,9 @@ def main():
     ap.add_argument("--no-enrich", action="store_true",
                     help="do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS), look up the "
                          "CVEs of the versions found (NVD) nor check the reputation of the host names (block "
-                         "lists, URLhaus)")
+                         "lists, URLhaus, Criminal IP)")
     ap.add_argument("--no-reputation", action="store_true",
-                    help="do not check the reputation of the host names (block lists, URLhaus); "
+                    help="do not check the reputation of the host names (block lists, URLhaus, Criminal IP); "
                          "--no-enrich turns it off too")
     ap.add_argument("--no-analyze", action="store_true",
                     help="do not analyse the pages (technologies, sensitive pages, security headers, "
@@ -843,6 +846,12 @@ def main():
                          "actuator...) on every web service; each answer is checked against a signature")
     ap.add_argument("--files-wordlist", metavar="FILE",
                     help="file list for --files: path<TAB>severity<TAB>regex per line (implies --files)")
+    ap.add_argument("--criminalip-ips", type=int, default=DEFAULT_IPS, metavar="N",
+                    help="with the key criminalip: public IPs looked up per scan (free account: 50 per month); "
+                         "0 = none")
+    ap.add_argument("--criminalip-domains", type=int, default=DEFAULT_DOMAINS, metavar="N",
+                    help="with the key criminalip: registrable domains scanned per scan (free account: 100 per "
+                         "month); 0 = none")
     ap.add_argument("--waf-probe", action="store_true",
                     help="send one request with a harmless attack-like string (XSS / SQL / ../) per web service "
                          "to see whether a WAF blocks it; active test")
@@ -914,7 +923,8 @@ def main():
         print("\nEnrichment of the IPs found: Shodan host API (with key, else the free InternetDB), LeakIX (key), "
               "CISA KEV, FIRST EPSS.")
         print("Reputation of the public host names: filtering DNS resolvers (Quad9, Cloudflare, OpenDNS, AdGuard), "
-              "URLhaus (key abusech).")
+              "URLhaus (key abusech), Criminal IP (key criminalip: --criminalip-ips IPs and --criminalip-domains "
+              "domains per scan).")
         print("Targets: AS<number> expands to the prefixes announced by the AS (RIPEstat).")
         print(f"Keys file: {keys_path()}")
         return

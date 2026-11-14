@@ -20,6 +20,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 from . import __version__
+from .criminalip import DEFAULT_DOMAINS, DEFAULT_IPS, check_criminalip, worse
 from .dns import query as dns_query
 from .recon import SEVERITY, _sev as sev_badge
 
@@ -110,13 +111,14 @@ def urlhaus_host(host, key):
 
 def reputation_level(r, urlhaus_online=False):
     security = any(b.startswith(f[0] + " ") for b in r["blocked_by"] for f in DNS_FILTERS if f[4])
+    cip = r.get("criminalip_level", "")
     if urlhaus_online:
         return "critique"
     if security or r["urlhaus"]:
-        return "haute"
+        return worse("haute", cip)
     if r["blocked_by"]:
-        return "info"
-    return ""
+        return worse("info", cip)
+    return cip
 
 
 def level_rank(level):
@@ -130,6 +132,10 @@ def summary(r):
         parts.append("bloqué par " + ", ".join(r["blocked_by"]))
     if r["urlhaus"]:
         parts.append("URLhaus : " + r["urlhaus"])
+    if r.get("criminalip"):
+        parts.append("Criminal IP : " + r["criminalip"])
+    if r.get("names"):
+        parts.append("noms : " + ", ".join(r["names"]))
     return " ; ".join(parts)
 
 
@@ -158,7 +164,8 @@ def _resolve_hosts(results):
         return [x for lst in pool.map(one, names) for x in lst]
 
 
-def check_reputation(results, exposures, keys, log=print, stop=None):
+def check_reputation(results, exposures, keys, log=print, stop=None, cip_ips=DEFAULT_IPS,
+                     cip_domains=DEFAULT_DOMAINS):
     """Looks up the public host names of the scan. Names of internal IPs are skipped."""
     if exposures is None:  # enrichment off: resolve the names here, without any third-party lookup
         exposures = _resolve_hosts(results)
@@ -168,11 +175,15 @@ def check_reputation(results, exposures, keys, log=print, stop=None):
             (internal if x["internal"] else public).add(h)
     names = sorted({r["host"].lower() for r in results
                     if not _is_ip(r["host"]) and r["host"] not in internal and r["host"] in public})
+    cip_key = keys.get("criminalip", "")
     if not names:
-        return []
+        return _finish(check_criminalip([], [], exposures, results, cip_key, cip_ips, cip_domains, log, stop),
+                       {}, log)
     abusech = keys.get("abusech", "")
     srcs = ["résolveurs filtrants (Quad9, Cloudflare, OpenDNS, AdGuard)",
             "URLhaus" if abusech else "URLhaus ignoré (pas de clé abusech)"]
+    if cip_key and (cip_ips > 0 or cip_domains > 0):
+        srcs.append("Criminal IP")
     log(f"[réputation] {len(names)} nom(s) public(s) : {', '.join(srcs)}")
 
     reps = {n: {"host": n, "level": "", "blocked_by": [], "urlhaus": "", "errors": []} for n in names}
@@ -191,15 +202,19 @@ def check_reputation(results, exposures, keys, log=print, stop=None):
         list(pool.map(one, names))
     if all(UNREACHABLE in reps[n]["errors"] for n in names):
         log(f"[réputation] listes de blocage non vérifiées : {UNREACHABLE}")
-    out = []
-    for n in names:
-        r = reps[n]
-        r["level"] = reputation_level(r, online.get(n, False))
+    out = check_criminalip([reps[n] for n in names], names, exposures, results, cip_key, cip_ips, cip_domains,
+                           log, stop)
+    return _finish(out, online, log)
+
+
+def _finish(reps, online, log):
+    """Ranks the rows, logs those with a finding and sorts them by severity."""
+    for r in reps:
+        r["level"] = reputation_level(r, online.get(r["host"], False))
         if r["level"]:
-            log(f"[réputation] {n}  {r['level']}  {summary(r)}")
-        out.append(r)
-    out.sort(key=lambda r: level_rank(r["level"]))
-    return out
+            log(f"[réputation] {r['host']}  {r['level']}  {summary(r)}")
+    reps.sort(key=lambda r: level_rank(r["level"]))
+    return reps
 
 
 def write_reputation_csv(reps, path):
@@ -207,9 +222,10 @@ def write_reputation_csv(reps, path):
         return
     with open(path, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(["host", "level", "blocked_by", "urlhaus", "errors"])
+        w.writerow(["host", "level", "blocked_by", "urlhaus", "criminalip", "names", "errors"])
         for r in reps:
-            w.writerow([r["host"], r["level"], "; ".join(r["blocked_by"]), r["urlhaus"], "; ".join(r["errors"])])
+            w.writerow([r["host"], r["level"], "; ".join(r["blocked_by"]), r["urlhaus"], r.get("criminalip", ""),
+                        " ".join(r.get("names") or []), "; ".join(r["errors"])])
 
 
 def reputation_section(reps):
@@ -218,8 +234,8 @@ def reputation_section(reps):
     rows = [f"<tr><td>{sev_badge(r['level'])}</td><td>{html.escape(r['host'])}</td>"
             f"<td>{html.escape(summary(r))}</td></tr>" for r in reps if r["level"]]
     if not rows:
-        return (f"<p><b>Réputation</b> : {len(reps)} nom(s) vérifié(s), aucun sur une liste de blocage "
+        return (f"<p><b>Réputation</b> : {len(reps)} nom(s) ou IP vérifié(s), aucun sur une liste de blocage "
                 f"ou de menaces.</p>")
-    return (f"<details open><summary><b>Réputation (listes de blocage, malware, phishing)</b> - {len(rows)} nom(s) "
-            f"signalé(s) sur {len(reps)}</summary><table><tr><th>Niveau</th><th>Nom</th><th>Constat</th></tr>"
+    return (f"<details open><summary><b>Réputation (listes de blocage, malware, phishing)</b> - {len(rows)} "
+            f"signalé(s) sur {len(reps)}</summary><table><tr><th>Niveau</th><th>Nom / IP</th><th>Constat</th></tr>"
             f"{''.join(rows)}</table></details>")

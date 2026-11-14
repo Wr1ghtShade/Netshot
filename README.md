@@ -28,7 +28,8 @@ netshot/
 │   ├── theme.py          thème clair / sombre de l'interface
 │   ├── leakcheck.py      fuites de données (LeakCheck Pro API v2), onglet Leaks
 │   ├── pagecheck.py      contenu mixte, SRI, traqueurs, WAF (passif et --waf-probe)
-│   └── reputation.py     réputation des noms : résolveurs filtrants, URLhaus
+│   ├── reputation.py     réputation des noms : résolveurs filtrants, URLhaus, Criminal IP
+│   └── criminalip.py     Criminal IP : analyse de domaine et score des IP (crédits plafonnés)
 ├── assets/               icon.png, icon-32.png (logo radar), subdomains.txt (dictionnaire DNS), dirs.txt (dossiers courants), files.txt (fichiers sensibles)
 ├── examples/             targets.example.txt
 └── screenshots/          sorties de l'interface graphique
@@ -149,7 +150,7 @@ python netshot.py --key domscan=XXXX --key leakix=YYYY --save-keys
 Une variable `NETSHOT_KEY_<SOURCE>` (ex. `NETSHOT_KEY_DOMSCAN`) remplace la clé du fichier.
 
 Services acceptant une clé : certspotter, hackertarget, urlscan, virustotal, dnsdumpster, domscan,
-viewdns, leakix, shodan, leakcheck, nvd, abusech (URLhaus).
+viewdns, leakix, shodan, leakcheck, nvd, abusech (URLhaus), criminalip (Criminal IP).
 
 ### 🌍 Plages d'un AS et import CSV
 
@@ -272,10 +273,14 @@ interne n'est jamais envoyé). Désactivable avec `--no-reputation` (ou `--no-en
 |---|---|---|
 | **Résolveurs DNS filtrants** | aucune | Quad9 (malware, phishing), Cloudflare 1.1.1.2 (malware), OpenDNS (phishing), AdGuard DNS (publicité, traqueurs) : un nom qui résout normalement (1.1.1.1) mais que ces résolveurs bloquent (NXDOMAIN, `0.0.0.0`, page de blocage) est signalé. Le port 53 sortant doit être ouvert ; sinon le journal l'indique |
 | **URLhaus** (abuse.ch) | `abusech`, gratuite | URL malveillantes connues sur le nom (et combien sont encore en ligne), présence dans Spamhaus DBL et SURBL |
+| **Criminal IP** | `criminalip`, gratuite (Mon compte > API Key) | **domaine** : analyse « lite » du domaine principal (score, probabilité de phishing, catégorie malware / phishing, punycode, faux lien https) ; **IP** : score entrant et sortant, VPN / Tor / proxy / scanner, signalements d'abus, sur les IP publiques qui portent le plus de services. Compte gratuit : 50 IP et 100 analyses de domaine par mois, d'où des plafonds par scan : `--criminalip-ips 5` et `--criminalip-domains 1` par défaut (0 = aucun), réglables aussi dans « Réglages avancés ». Arrêt immédiat si la clé est refusée ou les crédits épuisés |
 
-Niveau : **critique** (URL malveillante encore en ligne selon URLhaus), **haute** (bloqué par un
-résolveur de sécurité, ou nom connu d'URLhaus), **info** (bloqué seulement par AdGuard, donc
-publicité ou traqueur). Sans clé `abusech`, seuls les résolveurs filtrants sont interrogés.
+Niveau : **critique** (URL malveillante encore en ligne selon URLhaus, score Criminal IP « Critical »
+ou domaine classé malware / phishing), **haute** (bloqué par un résolveur de sécurité, nom connu
+d'URLhaus, score « Dangerous », phishing probable à 70 % ou plus), **moyenne** (score « Moderate »),
+**info** (bloqué seulement par AdGuard, donc publicité ou traqueur). Sans clé `abusech` ni
+`criminalip`, seuls les résolveurs filtrants sont interrogés. Les IP vérifiées par Criminal IP ont
+leur propre ligne (avec les noms scannés qui y pointent).
 Section « Réputation » en tête du rapport, `reputation.csv`, onglet « Réputation » de `results.xlsx`.
 
 ### 🔬 Analyse des pages
@@ -386,6 +391,8 @@ Chaque scan crée un sous-dossier `scan_<domaine>_<date>` (ex. `scan_guifort.ovh
 | `--list-sources` | liste les sources et les clés configurées | - |
 | `--no-enrich` | désactive l'enrichissement des IP, la recherche des CVE dans NVD et la réputation des noms | enrichissement actif |
 | `--no-reputation` | désactive seulement la réputation des noms | réputation active |
+| `--criminalip-ips N` | IP publiques vérifiées par Criminal IP à chaque scan (clé `criminalip`) ; 0 = aucune | 5 |
+| `--criminalip-domains N` | domaines analysés par Criminal IP à chaque scan ; 0 = aucun | 1 |
 | `--no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires) | analyse active |
 | `--exclude CIBLES` | cibles hors périmètre : IP, CIDR, nom ou `*.domaine`, séparées par des virgules (répétable) | - |
 | `--exclude-file FILE` | fichier de cibles hors périmètre, une par ligne (répétable) | - |

@@ -34,6 +34,8 @@ from . import whois as netshot_whois
 from . import leakcheck
 from . import scan as netshot
 from . import sources
+from .criminalip import DEFAULT_DOMAINS as CIP_DEFAULT_DOMAINS, DEFAULT_IPS as CIP_DEFAULT_IPS
+from .sources import registrable_domain
 from . import theme
 from . import tls as netshot_tls
 
@@ -65,12 +67,12 @@ LEAK_DATA_COLS = {"email": ("E-mail", 220), "username": ("Identifiant", 120), "p
 LEAK_MASK = "••••••••"  # fixed length: the length of a password is information too
 
 
-def registrable_domain(host):
-    """Last two labels, or three under a second-level suffix of a country (example.co.uk, example.gouv.fr)."""
-    parts = host.split(".")
-    n = 3 if len(parts) >= 3 and len(parts[-1]) == 2 and parts[-2] in (
-        "co", "com", "net", "org", "gov", "gouv", "ac", "edu", "asso", "nom") else 2
-    return ".".join(parts[-n:])
+def _int_or(var, default):
+    """An IntVar's value (>= 0), the default when the field holds no number."""
+    try:
+        return max(0, int(var.get()))
+    except (tk.TclError, ValueError):
+        return default
 
 
 def scan_label(targets):
@@ -332,7 +334,7 @@ class NetshotApp:
         self.tls_scan = tk.BooleanVar(value=True)
         self.label_shots = tk.BooleanVar(value=True)
         option(passive, self.enrich, "Enrichir les IP et les versions", "Shodan, LeakIX, NVD, CISA KEV, EPSS")
-        option(passive, self.reputation, "Réputation des noms", "Listes de blocage DNS, URLhaus")
+        option(passive, self.reputation, "Réputation des noms", "Listes de blocage DNS, URLhaus, Criminal IP")
         option(passive, self.tls_scan, "Analyser les certificats TLS", "Versions, suites, PQC, chaîne, HSTS")
         option(passive, self.label_shots, "Inscrire l'URL sur les captures", "Bandeau hôte:port, URL, statut, date")
 
@@ -352,6 +354,8 @@ class NetshotApp:
         self.connect_timeout = tk.DoubleVar(value=1.5)
         self.page_timeout = tk.DoubleVar(value=15)
         self.delay = tk.DoubleVar(value=0)
+        self.cip_ips = tk.IntVar(value=CIP_DEFAULT_IPS)
+        self.cip_domains = tk.IntVar(value=CIP_DEFAULT_DOMAINS)
         self.resolution = tk.StringVar(value="1920 x 1080 (Full HD)")
         self.proxy = tk.StringVar()
         self.exclude = tk.StringVar()
@@ -397,6 +401,13 @@ class NetshotApp:
             ttk.Label(body, text="Résolution").grid(row=5, column=0, sticky="w", pady=2)
             ttk.Combobox(body, textvariable=self.resolution, values=list(RESOLUTIONS), state="readonly",
                          width=22).grid(row=5, column=1, sticky="w", pady=2)
+            for row, (label, var, hi) in enumerate((("Criminal IP : IP", self.cip_ips, 50),
+                                                     ("Criminal IP : domaines", self.cip_domains, 20)), start=6):
+                ttk.Label(body, text=label).grid(row=row, column=0, sticky="w", pady=2, padx=(0, 8))
+                ttk.Spinbox(body, textvariable=var, from_=0, to=hi, increment=1, width=8).grid(
+                    row=row, column=1, sticky="w", pady=2)
+            ttk.Label(body, text="par scan, avec la clé criminalip (gratuit : 50 IP et 100 domaines / mois)",
+                      style="Muted.TLabel").grid(row=8, column=1, sticky="w")
 
         def scope(body):
             ttk.Label(body, text="Proxy").grid(row=0, column=0, sticky="w", pady=2, padx=(0, 8))
@@ -1360,7 +1371,9 @@ class NetshotApp:
                                dirs=dir_words() if self.probe_dirs.get() else None,
                                proxy=proxy, exclusions=exclusions,
                                files=file_rules() if self.probe_files.get() else None,
-                               waf_probe=self.waf_probe.get())
+                               waf_probe=self.waf_probe.get(),
+                               criminalip_ips=_int_or(self.cip_ips, CIP_DEFAULT_IPS),
+                               criminalip_domains=_int_or(self.cip_domains, CIP_DEFAULT_DOMAINS))
         self.report = output / "report.html"
 
         self.stop_event.clear()

@@ -3,6 +3,44 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.7] - 2026-11-14
+
+### Ajouté
+- **Criminal IP** dans la réputation (clé `criminalip`, compte gratuit : 50 consultations d'IP et
+  100 analyses de domaine par mois) :
+  - **domaine** : analyse « lite » (`/v1/domain/lite/scan`, suivi de `/progress`, puis `/report`)
+    du domaine enregistrable le plus scanné : score du domaine, catégorie (malware, phishing…),
+    probabilité de phishing, faux lien https, punycode, IP liées signalées. Le résultat va sur la
+    ligne du domaine, créée si le domaine lui-même n'a pas été scanné. Abandon après 3 min.
+  - **IP** : `/v1/feature/ip/suspicious-info` sur les IP publiques qui portent le plus de services :
+    score entrant et sortant, VPN / Tor / proxy / scanner / Snort, nombre de signalements d'abus.
+    Chaque IP a sa propre ligne « Réputation », avec les noms scannés qui y pointent.
+  - Plafonds par scan pour ne pas vider le quota : `--criminalip-ips` (5 par défaut) et
+    `--criminalip-domains` (1 par défaut), 0 = aucun ; deux champs « Criminal IP : IP » et « Criminal IP : domaines » dans RÉGLAGES AVANCÉS, avec un rappel des quotas gratuits.
+  - Le journal annonce le nombre de domaines et d'IP vérifiés et celles laissées de côté par le
+    plafond. Clé refusée (401) ou crédits épuisés (403 / 429) : arrêt immédiat des appels.
+  - Jamais d'IP interne ni de nom pointant vers une IP interne envoyé à Criminal IP.
+  - Clé `criminalip` ajoutée à l'onglet Clés (lien vers la page du compte où la copier).
+- Tests : faux serveur Criminal IP (scores en mot ou en chiffre, classification, plafonds, IP
+  internes jamais envoyées, clé refusée).
+
+### Modifié
+- Niveaux de réputation : un score Criminal IP « Critical » ou un domaine classé malware / phishing
+  donne **critique** ; « Dangerous », un phishing probable à 70 % ou plus ou un faux lien https
+  donnent **haute** ; « Moderate » donne **moyenne**. Le niveau retenu est le plus grave des sources.
+- Rapport : la section Réputation compte « signalé(s) » (noms et IP) et la colonne devient
+  « Nom / IP ». `reputation.csv` gagne les colonnes `criminalip` et `names` ; l'onglet
+  « Réputation » de `results.xlsx` gagne « Criminal IP » et « Noms de l'IP ».
+- `registrable_domain` déplacée de `core/gui.py` vers `core/sources.py` (utilisée aussi par Criminal IP, sans dépendre de tkinter).
+- README : ligne Criminal IP dans le tableau des sources de réputation, options `--criminalip-ips`
+  et `--criminalip-domains`, nouveaux niveaux.
+
+Non vérifié en conditions réelles : l'API Criminal IP n'est pas joignable depuis l'environnement de
+développement ; le format des réponses suit le plugin officiel Criminal IP (Volatility3) et les
+intégrations publiques. Premier scan avec la clé : vérifier le journal `[criminalip]`.
+
+Fichiers : `core/criminalip.py` (nouveau), `core/reputation.py`, `core/scan.py`, `core/gui.py`, `core/sources.py`, `core/export.py`, README, CHANGELOG.
+
 ## [1.2.6] - 2026-11-14
 
 ### Retiré
