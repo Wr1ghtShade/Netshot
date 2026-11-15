@@ -62,7 +62,9 @@ from .webinfo import (TAGS, WEB_CSS, card_extras, detect_tech, dir_words, probe_
 from .enrich import vuln_badges
 from .export import build_sheets, write_json, write_xlsx
 from .pagecheck import PAGE_RESOURCES_JS, analyze_resources, detect_waf, page_checks_section, page_issues, probe_waf
-from .cloud import cloud_section, discover_cloud, finish_cloud, write_cloud_csv
+from .cloud import cloud_domains, cloud_section, discover_cloud, finish_cloud, write_cloud_csv
+from .discover import (cert_pivot, collect_risks, extra_sections, new_extra, org_pivot, risks_section,
+                       run_extra_checks)
 from .criminalip import DEFAULT_DOMAINS, DEFAULT_IPS
 from .reputation import check_reputation, reputation_section, write_reputation_csv
 from .recon import (DEFAULT_CREDS, PORT_PRESETS, RECON_CSS, ScriptCollector, analyze_js, banner_display,
@@ -527,7 +529,7 @@ def filter_bar(results, inventory):
 
 
 def write_reports(results, outdir, exposures=None, tls_results=None, inventory=None, visual_groups=None,
-                  takeovers=None, reputation=None, cloud=None):
+                  takeovers=None, reputation=None, cloud=None, ext=None):
     results.sort(key=lambda r: (r["host"], r["port"]))
     with open(outdir / "results.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=["host", "port", "ua", "url", "status", "title", "final_url",
@@ -640,8 +642,10 @@ h1.brand{{display:flex;align-items:center;gap:10px;margin:0 0 4px}}
 h1.brand img{{width:36px;height:36px}}
 </style></head><body>
 <h1 class="brand">{f'<img src="{logo}" alt="">' if logo else ""}NetShot</h1><p>v{__version__} - {len(groups)} services, {len(results)} captures - {datetime.now():%Y-%m-%d %H:%M}</p>
+{risks_section(collect_risks(results, exposures, tls_results, takeovers, reputation, cloud, ext))}
 {reputation_section(reputation or [])}
 {cloud_section(cloud)}
+{extra_sections(ext)}
 {takeover_section(takeovers or [])}
 {files_section(results)}
 {sensitive_section(results)}
@@ -690,6 +694,24 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             hosts = hosts + added
         else:
             cloud["added"] = []
+    ext = new_extra()
+    own_domains = list((cloud or {}).get("org_domains") or cloud_domains(hosts))
+    if getattr(args, "pivot", True) and not (stop and stop.is_set()):
+        if getattr(args, "proxy", None):
+            log("[pivot] lecture des certificats impossible à travers le proxy : non lancée")
+        else:
+            own = set(own_domains)
+            added = await asyncio.to_thread(cert_pivot, hosts, own, ext, log)
+            known = {h.lower() for h in hosts + added}
+            added += await asyncio.to_thread(org_pivot, own, known, ext, log)
+            own_domains = sorted(own)
+            if getattr(args, "cloud_targets", True):
+                if excl and added:
+                    added = await asyncio.to_thread(excl.filter, added, log)
+                hosts = hosts + added
+            else:
+                for p in ext["cert_names"] + ext["org_domains"]:
+                    p["added"] = False
     proxy = getattr(args, "proxy", None)
     if proxy:
         log(f"[proxy] pages, favicons et dossiers via {proxy['server']}"
@@ -799,12 +821,14 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             write_cloud_csv(cloud, args.output / "cloud.csv")
         except OSError as exc:
             log(f"[cloud] {exc}")
-    write_reports(results, args.output, exposures, tls_results, inventory, groups, takeovers, reputation, cloud)
+    if not (stop and stop.is_set()):
+        await asyncio.to_thread(run_extra_checks, args, hosts, ports, own_domains, cloud, ext, args.output, log, stop)
+    write_reports(results, args.output, exposures, tls_results, inventory, groups, takeovers, reputation, cloud, ext)
     write_json(args.output / "results.json", results, exposures, tls_results, inventory, groups, takeovers, reputation,
-               cloud)
+               cloud, ext, collect_risks(results, exposures, tls_results, takeovers, reputation, cloud, ext))
     try:
         write_xlsx(args.output / "results.xlsx", build_sheets(results, exposures, inventory, takeovers, reputation,
-                                                              cloud))
+                                                              cloud, ext))
     except OSError as exc:
         log(f"[export] results.xlsx : {exc}")
     ok = sum(1 for r in results if r["file"])
@@ -854,6 +878,14 @@ def main():
     ap.add_argument("--no-cloud", action="store_true",
                     help="do not look for the cloud and SaaS footprint of the domains (Microsoft 365 tenant, SaaS, "
                          "AWS / Azure / GCP / Cloudflare IPs)")
+    ap.add_argument("--no-pivot", action="store_true",
+                    help="do not read the certificate names of the targets nor search crt.sh and RDAP for the "
+                         "organisation")
+    ap.add_argument("--udp", action="store_true",
+                    help="probe DNS, NTP, SNMP (v3 discovery), IKE, OpenVPN and SSDP over UDP on every target IP "
+                         "(active)")
+    ap.add_argument("--no-ipv6-parity", action="store_true",
+                    help="do not compare the scanned ports of the dual-stack names on IPv4 and IPv6")
     ap.add_argument("--no-cloud-targets", action="store_true",
                     help="keep the cloud footprint but do not add the domains and tenant pages found to the scan")
     ap.add_argument("--no-reputation", action="store_true",
@@ -971,6 +1003,8 @@ def main():
     args.reputation = args.enrich and not args.no_reputation
     args.cloud = not args.no_cloud
     args.cloud_targets = not args.no_cloud_targets
+    args.pivot = not args.no_pivot
+    args.ipv6_parity = not args.no_ipv6_parity
     args.analyze = not args.no_analyze
     try:
         args.proxy = parse_proxy(args.proxy)

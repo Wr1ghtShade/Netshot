@@ -576,6 +576,7 @@ def discover_cloud(hosts, log=print, stop=None):
             add(f"{t['name']}-my.sharepoint.com", True)
     if rep["added"]:
         log(f"[cloud] {len(rep['added'])} cible(s) ajoutée(s) au scan : {', '.join(rep['added'])}")
+    rep["org_domains"] = sorted(own)
     return rep, full, web
 
 

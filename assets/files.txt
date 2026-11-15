@@ -61,6 +61,12 @@ openapi.json	info	"openapi"
 v2/api-docs	info	"swagger"
 v3/api-docs	info	"openapi"
 swagger-ui.html	info	(?i)swagger ui
+swagger/v1/swagger.json	info	"(swagger|openapi)"
+api/swagger.json	info	"(swagger|openapi)"
+api/openapi.json	info	"openapi"
+openapi.yaml	info	(?m)^openapi:
+swagger.yaml	info	(?m)^swagger:
+api-docs	info	"(swagger|openapi)"
 graphiql	moyenne	(?i)graphiql
 .well-known/openid-configuration	info	"issuer"
 debug/pprof/	haute	(?i)profile descriptions

@@ -3,6 +3,59 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.10] - 2026-11-15
+
+### Ajouté
+- **Noms des certificats** (`--no-pivot` pour désactiver) : avant le scan, le certificat servi sur
+  le port 443 de chaque cible (300 au plus) est lu ; les noms SAN des domaines de l'organisation
+  (domaines scannés et domaines du tenant) sont ajoutés au scan s'ils résolvent.
+- **crt.sh par organisation** : le nom d'organisation (O=) de ces certificats, hors CDN,
+  hébergeurs, clouds et autorités (Cloudflare, Amazon, Google, Microsoft, OVH…), est cherché dans
+  crt.sh (`?O=`, certificats non expirés, 3 noms au plus) ; les domaines certifiés au même nom
+  sont ajoutés au scan (25 au plus, ceux qui résolvent).
+- **Blocs d'IP de l'organisation** : RDAP des IP publiques trouvées (40 au plus, IP cloud
+  exclues) ; un bloc est retenu si son nom, son titulaire ou ses remarques contiennent un terme
+  de l'organisation (organisation des certificats, marque du tenant, premier label des domaines),
+  et s'il n'est pas plus large qu'un /16. Listé avec les IP déjà scannées et la ligne de cibles à
+  copier ; **jamais scanné** sans accord du client.
+- **Services UDP** (`--udp`, test actif, inactif par défaut) : sur chaque IP cible (256 au plus),
+  DNS (requête récursive : résolveur ouvert = gravité haute), NTP, SNMP (découverte SNMPv3 RFC
+  3414, aucune communauté essayée ; exposé = moyenne), IKE v1 Main Mode, OpenVPN
+  (HARD_RESET_CLIENT_V2), SSDP (M-SEARCH, en-tête SERVER relevé ; exposé = moyenne). Deux essais
+  de 2 s par sonde. Non lancé à travers un proxy.
+- **Parité IPv4 / IPv6** (`--no-ipv6-parity` pour désactiver) : les ports scannés des noms
+  double pile (50 au plus) sont essayés sur leur première IPv4 et leur première IPv6 ; un port
+  ouvert seulement en IPv6 est signalé (gravité haute). Sauté, avec une note, si le poste n'a pas
+  d'accès IPv6 ou passe par un proxy.
+- **Code public GitHub** (clé `github`) : recherche de code de 3 domaines de l'organisation au
+  plus, seule puis avec password / secret / token / apikey, 7 s entre deux requêtes ; dépôt,
+  fichier et lien relevés, fichiers non téléchargés. Jeton refusé ou limite atteinte : arrêt avec
+  une note.
+- **Top risques** en tête du rapport : KEV, EPSS ≥ 50 %, fuites LeakIX, fichiers sensibles
+  critiques ou élevés, secrets JavaScript, pages de débogage, interfaces d'administration, listes
+  de fichiers ouvertes, TLS noté F ou T, prise de contrôle de sous-domaine, réputation critique ou
+  haute, UDP risqué, ports IPv6 seuls, code public citant un secret. 10 premiers constats,
+  identiques regroupés ; liste complète dans `risks` de `results.json`.
+- **API documentées** : `swagger/v1/swagger.json`, `api/swagger.json`, `api/openapi.json`,
+  `openapi.yaml`, `swagger.yaml`, `api-docs` ajoutés à `files.txt` (71 fichiers).
+- Sorties : sections « Découverte élargie », « Services UDP », « Parité IPv4 / IPv6 », « Code
+  public (GitHub) » ; `discovery.csv` ; onglet « Découverte » ; clés `discovery` et `risks` de
+  `results.json`. Clé `github` dans l'onglet Clés. cases « Découverte élargie » et « Parité IPv4 / IPv6 » (ANALYSE PASSIVE), « Services UDP » (TESTS ACTIFS).
+- Lecture des certificats avec le décodeur DER de `core/tls.py` (aucune dépendance ajoutée) ; non lancée à travers un proxy.
+- Tests : paquets UDP (longueurs SNMP BER et IKE), lecture DNS (résolveur ouvert ou non) et SSDP,
+  termes d'organisation et organisations ignorées, recherche GitHub (jeton refusé, résultats),
+  Top risques et sections ; scan de démonstration avec de faux services DNS et SSDP locaux.
+
+### Modifié
+- `--no-cloud-targets` empêche maintenant tout ajout au scan (cloud, certificats, crt.sh).
+- L'empreinte cloud expose les domaines de l'organisation (`org_domains`) utilisés par la
+  découverte élargie et la recherche GitHub.
+
+Non vérifié en conditions réelles : crt.sh, RDAP et l'API GitHub ne sont pas joignables depuis
+l'environnement de développement.
+
+Fichiers : `core/discover.py` (nouveau), `core/scan.py`, `core/gui.py`, `core/export.py`, `core/cloud.py`, `core/sources.py`, `assets/files.txt`, README, CHANGELOG.
+
 ## [1.2.9] - 2026-11-15
 
 ### Corrigé

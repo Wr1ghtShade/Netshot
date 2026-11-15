@@ -41,6 +41,7 @@ KEY_SOURCES = [
     ("nvd", "NVD (NIST)", "https://nvd.nist.gov/developers/request-an-api-key"),
     ("abusech", "abuse.ch (URLhaus)", "https://auth.abuse.ch/"),
     ("criminalip", "Criminal IP", "https://www.criminalip.io/mypage/information"),
+    ("github", "GitHub (recherche de code)", "https://github.com/settings/personal-access-tokens"),
 ]
 
 
