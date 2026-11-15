@@ -305,6 +305,10 @@ fournisseur d'identité de l'organisation (ex. `sts.exemple.fr`) sur tous les po
 pages SaaS du tenant (`xxx.sharepoint.com`, `xxx-my.sharepoint.com`, fournisseur d'identité hébergé
 comme `exemple.okta.com`) sur le **port 443 seulement**, une page https comme l'ouvrirait un
 navigateur. Seuls les noms qui résolvent sont ajoutés, et le fichier d'exclusions s'applique.
+Les domaines de l'organisation ajoutés passent par **tout** le scan habituel, y compris la
+recherche de dossiers et de fichiers sensibles (`--dirs`, `--files`) et la sonde WAF quand elles
+sont activées. Les pages SaaS du tenant, elles, n'ont que la capture et l'analyse passive : ni
+dossiers, ni fichiers, ni sonde WAF, car c'est l'infrastructure du fournisseur, pas celle du client.
 `--no-cloud-targets` garde l'empreinte sans rien ajouter ; `--no-cloud` (ou la case « Empreinte
 cloud et SaaS » de l'interface) la désactive. Les noms de buckets ou de comptes de stockage ne sont
 **jamais devinés** : ce serait sonder des ressources qui n'appartiennent peut-être pas au client.

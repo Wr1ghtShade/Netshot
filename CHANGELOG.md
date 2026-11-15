@@ -3,6 +3,23 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.9] - 2026-11-15
+
+### Corrigé
+- **Périmètre des pages SaaS ajoutées par l'empreinte cloud** (`xxx.sharepoint.com`,
+  `xxx-my.sharepoint.com`, fournisseur d'identité hébergé chez un tiers) : elles recevaient la
+  recherche de dossiers (`--dirs`), de fichiers sensibles (`--files`) et la sonde WAF
+  (`--waf-probe`) quand ces options étaient activées, c'est-à-dire des requêtes actives sur
+  l'infrastructure de Microsoft ou de l'éditeur. Elles n'ont plus que la capture et l'analyse
+  passive.
+
+### Précisé
+- Les domaines de l'organisation ajoutés au scan (autres domaines du tenant, fournisseur
+  d'identité de l'organisation) passent par tout le scan habituel, dossiers, fichiers sensibles et
+  sonde WAF compris quand ces options sont activées (README).
+
+Fichiers : `core/scan.py`, README, CHANGELOG.
+
 ## [1.2.8] - 2026-11-15
 
 ### Ajouté

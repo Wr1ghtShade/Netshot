@@ -40,6 +40,7 @@ Use only on networks and domains you are authorized to scan.
 import argparse
 import asyncio
 import base64
+import copy
 import csv
 import html
 import ipaddress
@@ -719,7 +720,12 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
         if getattr(args, "analyze", True):
             # Blank page used to hash the screenshots (no CSP, no network)
             args.web = {"hasher": await contexts[0][1].new_page(), "favicons": {}}
-        tasks = [process(h, p, args, contexts, sem, results, counter, log, stop, limiter, on_shot)
+        # SaaS pages of the tenant (SharePoint, Okta…) belong to the provider: screenshot and passive
+        # analysis only, no folder, file or WAF probe
+        saas_args = copy.copy(args)
+        saas_args.dirs, saas_args.files, saas_args.waf_probe = None, None, False
+        tasks = [process(h, p, saas_args if h in web_only else args, contexts, sem, results, counter, log, stop,
+                         limiter, on_shot)
                  for h in hosts for p in (web_ports if h in web_only else ports)]
 
         async def progress():
