@@ -29,7 +29,8 @@ netshot/
 │   ├── leakcheck.py      fuites de données (LeakCheck Pro API v2), onglet Leaks
 │   ├── pagecheck.py      contenu mixte, SRI, traqueurs, WAF (passif et --waf-probe)
 │   ├── reputation.py     réputation des noms : résolveurs filtrants, URLhaus, Criminal IP
-│   └── criminalip.py     Criminal IP : analyse de domaine et score des IP (crédits plafonnés)
+│   ├── criminalip.py     Criminal IP : analyse de domaine et score des IP (crédits plafonnés)
+│   └── cloud.py          empreinte cloud et SaaS : tenant M365, SaaS, plages AWS / Azure / GCP
 ├── assets/               icon.png, icon-32.png (logo radar), subdomains.txt (dictionnaire DNS), dirs.txt (dossiers courants), files.txt (fichiers sensibles)
 ├── examples/             targets.example.txt
 └── screenshots/          sorties de l'interface graphique
@@ -283,6 +284,34 @@ d'URLhaus, score « Dangerous », phishing probable à 70 % ou plus), **moyenne*
 leur propre ligne (avec les noms scannés qui y pointent).
 Section « Réputation » en tête du rapport, `reputation.csv`, onglet « Réputation » de `results.xlsx`.
 
+### ☁️ Empreinte cloud et SaaS (tenant, SaaS, IaaS / PaaS)
+
+Le site vitrine n'est souvent qu'une petite partie de la surface exposée : identité, messagerie,
+stockage et applications métier sont chez Microsoft, AWS, Google ou des éditeurs SaaS. Pour chaque
+domaine enregistrable scanné (5 au plus, domaines internes `.lan`, `.local`… exclus), NetShot
+cherche, sans clé et sans rien scanner chez le fournisseur :
+
+| Recherche | Comment | Ce qui est relevé |
+|---|---|---|
+| **Tenant Microsoft 365 / Entra ID** | pages publiques de `login.microsoftonline.com` (configuration OpenID, `getuserrealm`) et Autodiscover d'Exchange Online | ID du tenant, région, authentification gérée ou **fédérée** (avec le fournisseur d'identité : ADFS, Okta, Ping…), nom `xxx.onmicrosoft.com`, **autres domaines du tenant** (filiales, marques ; Microsoft peut en renvoyer moins que le tenant n'en a) |
+| **Google Workspace** | MX | messagerie Google |
+| **SaaS déclarés** | TXT de vérification (`MS=`, `atlassian-domain-verification`, `docusign=`, Zoom, Slack, Adobe, Apple, OpenAI…), `include:` du SPF (Salesforce, SendGrid, Mailchimp, Zendesk, HubSpot…), MX (Proofpoint, Mimecast, Vade…), NS (Route 53, Azure DNS, Cloudflare…) | ~190 signatures |
+| **PaaS / IaaS / CDN** | CNAME de chaque nom scanné et de `autodiscover`, `lyncdiscover`, `sip`, `enterpriseregistration`, `enterpriseenrollment`, `www` | Azure App Service, Blob, Front Door, AWS S3, ELB, CloudFront, API Gateway, App Engine, Cloud Run, Okta, Atlassian, Salesforce, Intune, Teams… |
+| **IP chez un fournisseur cloud** | plages publiées par AWS, Azure (Service Tags), Google Cloud et Cloudflare, gardées 7 jours en cache | fournisseur, service (S3, EC2, AzureAppService…), région, plage |
+| **CNAME orphelins** | contrôle de prise de contrôle de sous-domaine (lancé aussi sans l'analyse des pages) | risque de *subdomain takeover* |
+
+**Ce qui est découvert est ajouté au scan habituel** : les autres domaines du tenant et le
+fournisseur d'identité de l'organisation (ex. `sts.exemple.fr`) sur tous les ports demandés ; les
+pages SaaS du tenant (`xxx.sharepoint.com`, `xxx-my.sharepoint.com`, fournisseur d'identité hébergé
+comme `exemple.okta.com`) sur le **port 443 seulement**, une page https comme l'ouvrirait un
+navigateur. Seuls les noms qui résolvent sont ajoutés, et le fichier d'exclusions s'applique.
+`--no-cloud-targets` garde l'empreinte sans rien ajouter ; `--no-cloud` (ou la case « Empreinte
+cloud et SaaS » de l'interface) la désactive. Les noms de buckets ou de comptes de stockage ne sont
+**jamais devinés** : ce serait sonder des ressources qui n'appartiennent peut-être pas au client.
+
+Section « Empreinte cloud et SaaS » en tête du rapport, `cloud.csv`, onglet « Cloud et SaaS » de
+`results.xlsx`, clé `cloud` de `results.json`.
+
 ### 🔬 Analyse des pages
 
 Pendant la capture, NetShot lit ce que chaque page révèle, sans scan supplémentaire (seule requête en
@@ -391,6 +420,8 @@ Chaque scan crée un sous-dossier `scan_<domaine>_<date>` (ex. `scan_guifort.ovh
 | `--list-sources` | liste les sources et les clés configurées | - |
 | `--no-enrich` | désactive l'enrichissement des IP, la recherche des CVE dans NVD et la réputation des noms | enrichissement actif |
 | `--no-reputation` | désactive seulement la réputation des noms | réputation active |
+| `--no-cloud` | désactive l'empreinte cloud et SaaS | empreinte active |
+| `--no-cloud-targets` | garde l'empreinte sans ajouter au scan les domaines et pages trouvés | ajout actif |
 | `--criminalip-ips N` | IP publiques vérifiées par Criminal IP à chaque scan (clé `criminalip`) ; 0 = aucune | 5 |
 | `--criminalip-domains N` | domaines analysés par Criminal IP à chaque scan ; 0 = aucun | 1 |
 | `--no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires) | analyse active |

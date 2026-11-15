@@ -22,7 +22,7 @@ def _clean(r):
 
 
 def write_json(path, results, exposures=None, tls_results=None, inventory=None, groups=None, takeovers=None,
-               reputation=None):
+               reputation=None, cloud=None):
     data = {
         "netshot_version": __version__,
         "generated": datetime.now().isoformat(timespec="seconds"),
@@ -32,6 +32,7 @@ def write_json(path, results, exposures=None, tls_results=None, inventory=None, 
         "tls": tls_results or [],
         "similar_pages": [[r["url"] for r in g] for g in groups or []],
         "takeovers": takeovers or [],
+        "cloud": cloud,
         "reputation": reputation or [],
     }
     with open(path, "w", encoding="utf-8") as fh:
@@ -131,7 +132,7 @@ def write_xlsx(path, sheets):
                    '</styleSheet>')
 
 
-def build_sheets(results, exposures=None, inventory=None, takeovers=None, reputation=None):
+def build_sheets(results, exposures=None, inventory=None, takeovers=None, reputation=None, cloud=None):
     services = [[r.get("host", ""), r.get("port", ""), r.get("ua", ""), r.get("url", ""),
                  r.get("status", ""), r.get("title", ""), r.get("final_url", ""),
                  " ".join(r.get("tags") or []), ", ".join(tech_label(t) for t in r.get("tech") or []),
@@ -192,6 +193,10 @@ def build_sheets(results, exposures=None, inventory=None, takeovers=None, reputa
             js_rows.append([r["url"], "chemin d'API", "", ep, ""])
     if js_rows:
         sheets.append(("JavaScript", ["Page", "Type", "Détail", "Valeur (secrets masqués)", "Source:ligne"], js_rows))
+    if cloud and (cloud["tenants"] or cloud["services"] or cloud["ips"] or cloud["added"]):
+        from .cloud import cloud_rows
+        sheets.append(("Cloud et SaaS", ["Type", "Fournisseur / service", "Catégorie / service", "Nom / IP",
+                                         "Indice / région", "Détail"], cloud_rows(cloud)))
     if takeovers:
         sheets.append(("Takeover", ["Gravité", "Nom", "Chaîne CNAME", "Service", "Raison"],
                        [[t["level"], t["host"], t["cname"], t["service"], t["reason"]] for t in takeovers]))

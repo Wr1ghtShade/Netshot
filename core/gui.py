@@ -331,10 +331,12 @@ class NetshotApp:
         passive.pack(fill="x")
         self.enrich = tk.BooleanVar(value=True)
         self.reputation = tk.BooleanVar(value=True)
+        self.cloud = tk.BooleanVar(value=True)
         self.tls_scan = tk.BooleanVar(value=True)
         self.label_shots = tk.BooleanVar(value=True)
         option(passive, self.enrich, "Enrichir les IP et les versions", "Shodan, LeakIX, NVD, CISA KEV, EPSS")
         option(passive, self.reputation, "Réputation des noms", "Listes de blocage DNS, URLhaus, Criminal IP")
+        option(passive, self.cloud, "Empreinte cloud et SaaS", "Tenant M365, SaaS, AWS / Azure / GCP ; ajoute les domaines")
         option(passive, self.tls_scan, "Analyser les certificats TLS", "Versions, suites, PQC, chaîne, HSTS")
         option(passive, self.label_shots, "Inscrire l'URL sur les captures", "Bandeau hôte:port, URL, statut, date")
 
@@ -1366,7 +1368,8 @@ class NetshotApp:
         args = SimpleNamespace(output=output, concurrency=concurrency, connect_timeout=connect_timeout,
                                page_timeout=page_timeout, delay=delay, user_agents=user_agents,
                                width=width, height=height, enrich=self.enrich.get(),
-                               reputation=self.reputation.get(), keys=dict(self.keys),
+                               reputation=self.reputation.get(), cloud=self.cloud.get(),
+                               cloud_targets=True, keys=dict(self.keys),
                                tls=self.tls_scan.get(), label=self.label_shots.get(),
                                dirs=dir_words() if self.probe_dirs.get() else None,
                                proxy=proxy, exclusions=exclusions,

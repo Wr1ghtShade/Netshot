@@ -3,6 +3,49 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.8] - 2026-11-15
+
+### Ajouté
+- **Empreinte cloud et SaaS** de l'organisation scannée, passive et sans clé, sur les domaines
+  enregistrables des noms scannés (5 au plus, les plus fréquents ; domaines internes `.lan`,
+  `.local`, `.corp`… exclus) :
+  1. **Tenant Microsoft 365 / Entra ID** : configuration OpenID de `login.microsoftonline.com`
+     (ID du tenant, région), `getuserrealm.srf` (authentification gérée ou fédérée, fournisseur
+     d'identité et nom de marque), Autodiscover d'Exchange Online `GetFederationInformation`
+     (autres domaines du tenant et nom `xxx.onmicrosoft.com`). **Google Workspace** d'après les MX.
+  2. **SaaS, PaaS et IaaS** reconnus par ~190 signatures : TXT de vérification, `include:` du SPF,
+     MX, NS, et CNAME de chaque nom scanné ainsi que de `autodiscover`, `lyncdiscover`, `sip`,
+     `enterpriseregistration`, `enterpriseenrollment` et `www` de chaque domaine.
+  3. **IP publiques rattachées** à AWS (`ip-ranges.json`), Azure (Service Tags, lien lu sur la page
+     de téléchargement Microsoft), Google Cloud (`cloud.json`) et Cloudflare : fournisseur, service,
+     région, plage la plus précise. Plages gardées 7 jours dans le cache utilisateur
+     (`netshot/cloud-ranges`), copie périmée utilisée si le téléchargement échoue.
+  4. **CNAME orphelins** : le contrôle de prise de contrôle de sous-domaine tourne aussi quand
+     l'analyse des pages est désactivée ; ses résultats apparaissent dans l'empreinte (« CNAME
+     orphelin », gravité haute).
+  5. Section « Empreinte cloud et SaaS » en tête du rapport, `cloud.csv`, onglet « Cloud et SaaS »
+     de `results.xlsx`, clé `cloud` de `results.json`.
+- **Ajout automatique au scan** de ce qui est découvert, avant le début du scan : les autres
+  domaines du tenant (25 au plus, `*.onmicrosoft.com` exclus) et le fournisseur d'identité quand
+  il appartient à l'organisation, sur tous les ports demandés ; les pages SaaS du tenant
+  (`xxx.sharepoint.com`, `xxx-my.sharepoint.com`, fournisseur d'identité hébergé chez un tiers)
+  sur le port 443 seulement. Seuls les noms qui résolvent sont ajoutés ; le fichier d'exclusions
+  s'applique ; la barre de progression compte ces cibles.
+- Options `--no-cloud` et `--no-cloud-targets` ; case « Empreinte cloud et SaaS » dans ANALYSE PASSIVE.
+- Tests : signatures (TXT, SPF, MX, NS, CNAME), lecture Autodiscover, faux serveur Microsoft
+  (tenant fédéré, domaine sans tenant), plage la plus précise, lien des Service Tags (échappé
+  JSON ou non), fin d'empreinte (IP, CNAME orphelin, section, lignes CSV).
+
+### Choix
+- Aucun nom de bucket S3 ni de compte de stockage Azure n'est deviné : ce serait sonder des
+  ressources qui n'appartiennent peut-être pas au client.
+
+Non vérifié en conditions réelles : les services Microsoft et les listes de plages ne sont pas
+joignables depuis l'environnement de développement ; formats suivis : documentation publique des
+fournisseurs et méthode AADInternals pour Autodiscover.
+
+Fichiers : `core/cloud.py` (nouveau), `core/scan.py`, `core/gui.py`, `core/export.py`, README, CHANGELOG.
+
 ## [1.2.7] - 2026-11-14
 
 ### Ajouté

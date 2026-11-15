@@ -61,6 +61,7 @@ from .webinfo import (TAGS, WEB_CSS, card_extras, detect_tech, dir_words, probe_
 from .enrich import vuln_badges
 from .export import build_sheets, write_json, write_xlsx
 from .pagecheck import PAGE_RESOURCES_JS, analyze_resources, detect_waf, page_checks_section, page_issues, probe_waf
+from .cloud import cloud_section, discover_cloud, finish_cloud, write_cloud_csv
 from .criminalip import DEFAULT_DOMAINS, DEFAULT_IPS
 from .reputation import check_reputation, reputation_section, write_reputation_csv
 from .recon import (DEFAULT_CREDS, PORT_PRESETS, RECON_CSS, ScriptCollector, analyze_js, banner_display,
@@ -525,7 +526,7 @@ def filter_bar(results, inventory):
 
 
 def write_reports(results, outdir, exposures=None, tls_results=None, inventory=None, visual_groups=None,
-                  takeovers=None, reputation=None):
+                  takeovers=None, reputation=None, cloud=None):
     results.sort(key=lambda r: (r["host"], r["port"]))
     with open(outdir / "results.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=["host", "port", "ua", "url", "status", "title", "final_url",
@@ -639,6 +640,7 @@ h1.brand img{{width:36px;height:36px}}
 </style></head><body>
 <h1 class="brand">{f'<img src="{logo}" alt="">' if logo else ""}NetShot</h1><p>v{__version__} - {len(groups)} services, {len(results)} captures - {datetime.now():%Y-%m-%d %H:%M}</p>
 {reputation_section(reputation or [])}
+{cloud_section(cloud)}
 {takeover_section(takeovers or [])}
 {files_section(results)}
 {sensitive_section(results)}
@@ -676,6 +678,17 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
         if not hosts:
             log("[exclusion] plus aucune cible dans le périmètre")
             return []
+    cloud, web_only = None, set()
+    if getattr(args, "cloud", True) and not (stop and stop.is_set()):
+        cloud, full, web = await asyncio.to_thread(discover_cloud, hosts, log, stop)
+        if getattr(args, "cloud_targets", True):
+            added = full + web
+            if excl and added:
+                added = await asyncio.to_thread(excl.filter, added, log)
+            web_only = {h for h in added if h in web}
+            hosts = hosts + added
+        else:
+            cloud["added"] = []
     proxy = getattr(args, "proxy", None)
     if proxy:
         log(f"[proxy] pages, favicons et dossiers via {proxy['server']}"
@@ -684,7 +697,8 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
     args.output.mkdir(parents=True, exist_ok=True)
     results = []
     counter = {"done": 0}
-    total = len(hosts) * len(ports)
+    web_ports = [443]
+    total = (len(hosts) - len(web_only)) * len(ports) + len(web_only) * len(web_ports)
     sem = asyncio.Semaphore(args.concurrency)
     limiter = RateLimiter(getattr(args, "delay", 0))
 
@@ -706,7 +720,7 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             # Blank page used to hash the screenshots (no CSP, no network)
             args.web = {"hasher": await contexts[0][1].new_page(), "favicons": {}}
         tasks = [process(h, p, args, contexts, sem, results, counter, log, stop, limiter, on_shot)
-                 for h in hosts for p in ports]
+                 for h in hosts for p in (web_ports if h in web_only else ports)]
 
         async def progress():
             while counter["done"] < total:
@@ -746,6 +760,11 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             write_tls_csv(tls_results, args.output / "certificates.csv")
     inventory, groups = None, None
     args.takeovers = []
+    if getattr(args, "cloud", True) and args.web is None and results and not (stop and stop.is_set()):
+        # the footprint needs the dangling CNAMEs even without the page analysis
+        names = [h for h in hosts if not _is_ip(h)]
+        if names:
+            args.takeovers = await asyncio.to_thread(check_takeover, names, {}, log)
     if args.web is not None and results:
         groups = group_similar(results)
         if groups:
@@ -768,10 +787,18 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             await asyncio.to_thread(lookup_tech_cves, inventory, getattr(args, "keys", None) or {}, log, stop)
         write_tech_csv(inventory, args.output / "technologies.csv")
     takeovers = getattr(args, "takeovers", None) or []
-    write_reports(results, args.output, exposures, tls_results, inventory, groups, takeovers, reputation)
-    write_json(args.output / "results.json", results, exposures, tls_results, inventory, groups, takeovers, reputation)
+    if cloud is not None and not (stop and stop.is_set()):
+        await asyncio.to_thread(finish_cloud, cloud, results, exposures, takeovers, log)
+        try:
+            write_cloud_csv(cloud, args.output / "cloud.csv")
+        except OSError as exc:
+            log(f"[cloud] {exc}")
+    write_reports(results, args.output, exposures, tls_results, inventory, groups, takeovers, reputation, cloud)
+    write_json(args.output / "results.json", results, exposures, tls_results, inventory, groups, takeovers, reputation,
+               cloud)
     try:
-        write_xlsx(args.output / "results.xlsx", build_sheets(results, exposures, inventory, takeovers, reputation))
+        write_xlsx(args.output / "results.xlsx", build_sheets(results, exposures, inventory, takeovers, reputation,
+                                                              cloud))
     except OSError as exc:
         log(f"[export] results.xlsx : {exc}")
     ok = sum(1 for r in results if r["file"])
@@ -818,6 +845,11 @@ def main():
                     help="do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS), look up the "
                          "CVEs of the versions found (NVD) nor check the reputation of the host names (block "
                          "lists, URLhaus, Criminal IP)")
+    ap.add_argument("--no-cloud", action="store_true",
+                    help="do not look for the cloud and SaaS footprint of the domains (Microsoft 365 tenant, SaaS, "
+                         "AWS / Azure / GCP / Cloudflare IPs)")
+    ap.add_argument("--no-cloud-targets", action="store_true",
+                    help="keep the cloud footprint but do not add the domains and tenant pages found to the scan")
     ap.add_argument("--no-reputation", action="store_true",
                     help="do not check the reputation of the host names (block lists, URLhaus, Criminal IP); "
                          "--no-enrich turns it off too")
@@ -931,6 +963,8 @@ def main():
     args.keys = keys
     args.enrich = not args.no_enrich
     args.reputation = args.enrich and not args.no_reputation
+    args.cloud = not args.no_cloud
+    args.cloud_targets = not args.no_cloud_targets
     args.analyze = not args.no_analyze
     try:
         args.proxy = parse_proxy(args.proxy)
