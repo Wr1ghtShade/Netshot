@@ -3,6 +3,15 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.13] - 2026-11-16
+
+### Modifié
+- **Boutons d'user agent à leur largeur naturelle** (onglet Scan) : ils ne s'étirent plus pour
+  remplir une grille de 5 colonnes ; ils s'enchaînent à la ligne comme du texte, comme les
+  pastilles de l'interface Go, et se réorganisent quand la fenêtre change de largeur.
+
+Fichiers : `core/gui.py`, CHANGELOG.
+
 ## [1.2.12] - 2026-11-16
 
 ### Modifié

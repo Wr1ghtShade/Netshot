@@ -367,17 +367,33 @@ class NetshotApp:
                        command=lambda n=names: self.select_uas(n)).pack(side="right")
         self.ua_count = tk.StringVar()
         ttk.Label(ua_head, textvariable=self.ua_count, style="Muted.TLabel").pack(side="right", padx=(0, 8))
+        # chips at their natural width, wrapped like text (Go version: flex-wrap)
         ua_box = ttk.Frame(left)
         ua_box.grid(row=5, column=0, sticky="ew")
         self.ua_names = list(netshot.USER_AGENTS)
         self.ua_vars = {}
-        for i, name in enumerate(self.ua_names):
+        chips = []
+        for name in self.ua_names:
             kind = "bot" if name in netshot.BOT_UAS else "nav"
             self.ua_vars[name] = tk.BooleanVar(value=False)
-            ttk.Checkbutton(ua_box, text=f"{name}  {kind}", variable=self.ua_vars[name], style="Chip.Toolbutton",
-                            command=self.update_ua_count).grid(row=i // 5, column=i % 5, sticky="ew", padx=(0, 3), pady=1)
-        for col in range(5):
-            ua_box.columnconfigure(col, weight=1, uniform="ua")
+            chips.append(ttk.Checkbutton(ua_box, text=f"{name}  {kind}", variable=self.ua_vars[name],
+                                         style="Chip.Toolbutton", command=self.update_ua_count))
+
+        def flow(_event=None, box=ua_box, chips=chips, gap=4):
+            width = max(box.winfo_width(), 200)
+            x = y = row_h = 0
+            for c in chips:
+                w, h = c.winfo_reqwidth(), c.winfo_reqheight()
+                if x and x + w > width:
+                    x, y = 0, y + row_h + gap
+                    row_h = 0
+                c.place(x=x, y=y)
+                x += w + gap
+                row_h = max(row_h, h)
+            if int(box.cget("height") or 0) != y + row_h:
+                box.configure(height=y + row_h)
+        ua_box.bind("<Configure>", flow)
+        self.root.after_idle(flow)
         self.custom_ua = tk.StringVar()
         custom = ttk.Frame(left)
         custom.grid(row=6, column=0, sticky="ew", pady=(4, 0))
