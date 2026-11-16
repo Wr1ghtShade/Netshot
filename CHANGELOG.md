@@ -3,6 +3,22 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.14] - 2026-11-16
+
+### Corrigé
+- **Scan bloqué après « [cloud] empreinte cloud et SaaS de … »** : avant le scan, chaque domaine
+  était examiné l'un après l'autre (3 types DNS, 6 noms standard suivis de CNAME en CNAME, puis
+  3 requêtes Microsoft de 15 s de délai chacune). Sur un réseau filtré (résolveurs lents, Microsoft
+  injoignable, proxy), cela pouvait durer plusieurs minutes sans rien écrire au journal. Désormais :
+  - tous les domaines et toutes leurs requêtes partent **en parallèle** ;
+  - l'ensemble a un **budget de 60 s** : au-delà, le scan démarre quand même et le journal indique
+    « pas de réponse en 60 s (réseau filtré ?), empreinte incomplète » pour les domaines en retard ;
+  - le journal affiche une ligne **par domaine terminé** (services reconnus, tenant Microsoft) ;
+  - délai des requêtes Microsoft ramené de 15 à 10 s ;
+  - le bouton « Arrêter » interrompt l'attente aussitôt.
+
+Fichiers : `core/cloud.py`, CHANGELOG.
+
 ## [1.2.13] - 2026-11-16
 
 ### Modifié

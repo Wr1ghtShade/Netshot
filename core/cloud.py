@@ -31,7 +31,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 from .sources import is_internal_ip, registrable_domain
@@ -242,6 +242,7 @@ INTERNAL_TLDS = {"lan", "local", "localdomain", "internal", "intra", "intranet",
                  "localhost", "invalid", "example"}
 PROBE_NAMES = ["autodiscover", "lyncdiscover", "sip", "enterpriseregistration", "enterpriseenrollment", "www"]
 CACHE_DAYS = 7
+CLOUD_BUDGET = 60  # seconds for the tenant and DNS lookups before the scan
 
 
 def match_sig(source, value):
@@ -282,7 +283,7 @@ def _svc(m, source, host, evidence):
 
 # --- Microsoft 365 / Entra ID -------------------------------------------------------------------
 
-def _get_json(url, timeout=15):
+def _get_json(url, timeout=10):
     req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0 (Netshot)"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -318,7 +319,7 @@ def autodiscover_domains(domain):
                                      "SOAPAction": '"http://schemas.microsoft.com/exchange/2010/Autodiscover/'
                                                    'Autodiscover/GetFederationInformation"'})
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             return parse_autodiscover(resp.read(4 << 20))
     except (urllib.error.URLError, OSError, ValueError):
         return []
@@ -536,40 +537,63 @@ def discover_cloud(hosts, log=print, stop=None):
             (web if only_web else full).append(h)
             rep["added"].append(h + (" (443)" if only_web else ""))
 
-    for d in rep["domains"]:
-        if stop and stop.is_set():
-            break
-        recs = [r for t in (15, 16, 2) for r in _records(servers, d, t)]  # MX, TXT, NS
-        google = False
-        for s in record_services(d, recs):
-            add_service(s)
-            google = google or (s["service"] == "Google Workspace" and s["source"] == "MX")
-        if google:
-            rep["tenants"].append({"provider": "Google Workspace", "domain": d, "tenant_id": "", "name": "",
-                                   "region": "", "auth": "messagerie Google (MX)", "idp": "", "brand": "",
-                                   "domains": []})
-        for p in PROBE_NAMES:
-            if stop and stop.is_set():
-                break
-            name = f"{p}.{d}"
-            for c in cname_chain(name, servers)[0]:
-                m = match_sig("CNAME", c)
-                if m:
-                    add_service(_svc(m, "CNAME", name, c.rstrip(".")))
-                    break
-        if stop and stop.is_set():
-            break
-        try:
-            t = microsoft_tenant(d)
-        except (urllib.error.URLError, OSError, ValueError) as exc:
-            rep["errors"].append(f"{d} : {exc}")
-            continue
-        if not t:
-            continue
-        rep["tenants"].append(t)
-        log(f"[cloud] {d} : tenant Microsoft {t['tenant_id'] or '-'}, authentification {t['auth'] or '-'}"
-            + (f", fournisseur d'identité {t['idp']}" if t["idp"] else ""))
-        own |= {registrable_domain(x) for x in t["domains"] if not x.endswith(".onmicrosoft.com")}
+    def probe_domain(d):
+        """DNS records, standard CNAMEs and Microsoft tenant of one domain, all at once."""
+        with ThreadPoolExecutor(10) as pool:
+            recs_f = [pool.submit(_records, servers, d, t) for t in (15, 16, 2)]  # MX, TXT, NS
+            cname_f = {f"{p}.{d}": pool.submit(cname_chain, f"{p}.{d}", servers) for p in PROBE_NAMES}
+            tenant_f = pool.submit(microsoft_tenant, d)
+            services = record_services(d, [r for f in recs_f for r in f.result()])
+            for name, f in cname_f.items():
+                for c in f.result()[0]:
+                    m = match_sig("CNAME", c)
+                    if m:
+                        services.append(_svc(m, "CNAME", name, c.rstrip(".")))
+                        break
+            try:
+                tenant, err = tenant_f.result(), ""
+            except (urllib.error.URLError, OSError, ValueError) as exc:
+                tenant, err = None, f"{d} : {exc}"
+        return services, tenant, err
+
+    # every domain in parallel, within a time budget: a filtered network (DNS or Microsoft
+    # unreachable, proxy) must not hold the scan for minutes
+    pool = ThreadPoolExecutor(len(rep["domains"]))
+    futs = {pool.submit(probe_domain, d): d for d in rep["domains"]}
+    deadline = time.monotonic() + CLOUD_BUDGET
+    pending = set(futs)
+    while pending and time.monotonic() < deadline and not (stop and stop.is_set()):
+        done, pending = wait(pending, timeout=1, return_when=FIRST_COMPLETED)
+        for f in done:
+            d = futs[f]
+            try:
+                services, t, err = f.result()
+            except Exception as exc:  # noqa: BLE001 - one domain must not break the footprint
+                rep["errors"].append(f"{d} : {exc}")
+                continue
+            if err:
+                rep["errors"].append(err)
+            google = False
+            for sv in services:
+                add_service(sv)
+                google = google or (sv["service"] == "Google Workspace" and sv["source"] == "MX")
+            if google:
+                rep["tenants"].append({"provider": "Google Workspace", "domain": d, "tenant_id": "", "name": "",
+                                       "region": "", "auth": "messagerie Google (MX)", "idp": "", "brand": "",
+                                       "domains": []})
+            msg = f"[cloud] {d} : {len(services)} service(s) reconnu(s)"
+            if t:
+                rep["tenants"].append(t)
+                own |= {registrable_domain(x) for x in t["domains"] if not x.endswith(".onmicrosoft.com")}
+                msg += (f", tenant Microsoft {t['tenant_id'] or '-'}, authentification {t['auth'] or '-'}"
+                        + (f", fournisseur d'identité {t['idp']}" if t["idp"] else ""))
+            log(msg)
+    if pending:
+        late = ", ".join(sorted(futs[f] for f in pending))
+        why = "arrêt demandé" if stop and stop.is_set() else f"pas de réponse en {CLOUD_BUDGET} s (réseau filtré ?)"
+        log(f"[cloud] {late} : {why}, empreinte incomplète")
+        rep["errors"].append(f"{late} : {why}")
+    pool.shutdown(wait=False, cancel_futures=True)
     for t in rep["tenants"]:
         for td in [x for x in t["domains"] if not x.endswith(".onmicrosoft.com")][:25]:
             add(td, False)
