@@ -111,6 +111,76 @@ def scan_folder_name(targets, now):
     return f"scan_{label}_{now:%Y%m%d_%H%M%S}" if label else f"scan_{now:%Y%m%d_%H%M%S}"
 
 
+class ScrollCanvas(tk.Canvas):
+    """Canvas of a ScrollArea (the theme gives it the window colour)."""
+
+
+class ScrollArea(ttk.Frame):
+    """Vertical scrolling for a column of widgets placed in .inner: the scrollbar shows only when
+    the content is taller than the area (an opened fold, a small window), and the mouse wheel
+    scrolls while the pointer is over the column."""
+
+    def __init__(self, parent, width):
+        super().__init__(parent)
+        self.canvas = ScrollCanvas(self, width=width, height=120, highlightthickness=0, bd=0)
+        self.bar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.bar.set)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+        self.inner = ttk.Frame(self.canvas)
+        self._win = self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
+        self.inner.bind("<Configure>", self._update)
+        self.canvas.bind("<Configure>", self._update)
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            self.bind_all(seq, self._wheel, add="+")
+
+    def _update(self, _event=None):
+        self.canvas.itemconfigure(self._win, width=self.canvas.winfo_width())
+        h = self.inner.winfo_reqheight()
+        self.canvas.configure(scrollregion=(0, 0, self.inner.winfo_reqwidth(), h))
+        if h > self.canvas.winfo_height() + 1:
+            if not self.bar.winfo_ismapped():
+                self.bar.grid(row=0, column=1, sticky="ns", padx=(4, 0))
+        elif self.bar.winfo_ismapped():
+            self.bar.grid_remove()
+            self.canvas.yview_moveto(0)
+
+    def _inside(self, widget):
+        while widget is not None:
+            if widget is self:
+                return True
+            widget = widget.master
+        return False
+
+    def _wheel(self, event):
+        try:
+            under = self.winfo_containing(event.x_root, event.y_root)
+        except (KeyError, tk.TclError):  # pointer over a combobox popdown or another toplevel
+            return None
+        if not self._inside(under) or not self.bar.winfo_ismapped():
+            return None
+        if event.num == 4 or getattr(event, "delta", 0) > 0:
+            step = -1
+        else:
+            step = 1
+        if event.delta and abs(event.delta) >= 120:
+            step *= max(1, abs(event.delta) // 120)
+        self.canvas.yview_scroll(step * 2, "units")
+        return "break"
+
+    def protect_fields(self):
+        """Comboboxes and spinboxes change value on the mouse wheel: over the column the wheel
+        scrolls instead."""
+        def walk(w):
+            for c in w.winfo_children():
+                if c.winfo_class() in ("TCombobox", "TSpinbox"):
+                    for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                        c.bind(seq, lambda e: (self._wheel(e), "break")[1])
+                walk(c)
+        walk(self.inner)
+
+
 class ThinProgress(tk.Canvas):
     """6 px progress bar (a ttk one cannot be that thin in the clam theme). Same calls as the
     ttk.Progressbar it replaces: configure(maximum=..., value=...)."""
@@ -263,7 +333,7 @@ class NetshotApp:
         ttk.Label(head, textvariable=self.targets_pill, style="Pill.TLabel").pack(side="left")
         self._tool_buttons(head, lambda: self.targets.get("1.0", "end"), self.reset_targets).pack(side="right")
         ttk.Button(head, text="Charger fichier / CSV…", command=self.load_file).pack(side="right", padx=(0, 6))
-        self.targets = scrolledtext.ScrolledText(left, height=6, font=("Consolas", 10), relief="flat",
+        self.targets = scrolledtext.ScrolledText(left, height=4, font=("Consolas", 10), relief="flat",
                                                  padx=8, pady=6, highlightthickness=1)
         self.targets.grid(row=1, column=0, sticky="nsew", pady=(6, 2))
         self.targets.bind("<KeyRelease>", lambda e: self.update_targets_count())
@@ -317,8 +387,10 @@ class NetshotApp:
         self.update_ua_count()
 
         # --- Right: option groups
-        side = ttk.Frame(main, width=360)
-        side.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        # scrollable: an opened fold (advanced settings, scope) can be taller than the window
+        self.side_area = ScrollArea(main, width=390)  # fixed: opening a fold must not resize the tab
+        self.side_area.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        side = self.side_area.inner
 
         def option(parent, var, title, detail, active=False):
             box = ttk.Frame(parent)
@@ -338,7 +410,7 @@ class NetshotApp:
         self.label_shots = tk.BooleanVar(value=True)
         option(passive, self.enrich, "Enrichir les IP et les versions", "Shodan, LeakIX, NVD, CISA KEV, EPSS")
         option(passive, self.reputation, "Réputation des noms", "Listes de blocage DNS, URLhaus, Criminal IP")
-        option(passive, self.cloud, "Empreinte cloud et SaaS", "Tenant M365, SaaS, AWS / Azure / GCP ; ajoute les domaines")
+        option(passive, self.cloud, "Empreinte cloud et SaaS", "Tenant M365, SaaS, AWS / Azure / GCP")
         option(passive, self.pivot, "Découverte élargie", "Certificats, crt.sh par organisation, blocs d'IP")
         option(passive, self.ipv6_parity, "Parité IPv4 / IPv6", "Ports ouverts d'un côté seulement")
         option(passive, self.tls_scan, "Analyser les certificats TLS", "Versions, suites, PQC, chaîne, HSTS")
@@ -414,7 +486,7 @@ class NetshotApp:
                 ttk.Label(body, text=label).grid(row=row, column=0, sticky="w", pady=2, padx=(0, 8))
                 ttk.Spinbox(body, textvariable=var, from_=0, to=hi, increment=1, width=8).grid(
                     row=row, column=1, sticky="w", pady=2)
-            ttk.Label(body, text="par scan, avec la clé criminalip (gratuit : 50 IP et 100 domaines / mois)",
+            ttk.Label(body, text="par scan, clé criminalip (gratuit : 50 IP, 100 domaines / mois)", wraplength=190,
                       style="Muted.TLabel").grid(row=8, column=1, sticky="w")
 
         def scope(body):
@@ -435,6 +507,7 @@ class NetshotApp:
                     self.proxy, self.exclude):
             var.trace_add("write", lambda *a: self.update_fold_summaries())
         self.update_fold_summaries()
+        self.side_area.protect_fields()
 
         # --- Action bar: always visible at the bottom of the tab
         actions = ttk.Frame(main, padding=(0, 8, 0, 0))
@@ -556,8 +629,10 @@ class NetshotApp:
             return
         self.bottom.grid()
         scan = self.nb.select() == str(self.scan_tab)
-        self.outer.rowconfigure(1, weight=5 if scan else 6)
-        self.outer.rowconfigure(2, weight=1)
+        # the tab asks for little height (its option column scrolls): the journal and the last
+        # capture keep about 40 % of the free space on the Scan tab
+        self.outer.rowconfigure(1, weight=3 if scan else 6)
+        self.outer.rowconfigure(2, weight=2 if scan else 1)
 
     def _build_whois_tab(self):
         tab = ttk.Frame(self.nb, padding=10)
@@ -1419,6 +1494,17 @@ class NetshotApp:
         self.stop_event.set()
         self.stop_btn.configure(state="disabled")
         self.status.set("Arrêt en cours (fin des pages déjà ouvertes)…")
+        self.write_log("[stop] arrêt demandé : les étapes en cours se terminent, les suivantes sont sautées")
+        self.root.after(15000, self._stop_watch, 15)
+
+    def _stop_watch(self, waited):
+        """Tells the user what the stop waits for when it takes long (a request already sent cannot
+        be interrupted: crt.sh, a TLS analysis, a page that loads)."""
+        if not (self.worker and self.worker.is_alive()):
+            return
+        self.status.set(f"Arrêt en cours depuis {waited} s : fin des requêtes déjà envoyées (voir le journal). "
+                        "« Quitter » ferme NetShot sans attendre.")
+        self.root.after(15000, self._stop_watch, waited + 15)
 
     def finish(self, error):
         self.start_btn.configure(state="normal")
@@ -1454,6 +1540,10 @@ class NetshotApp:
             if not messagebox.askyesno("NetShot", "Un scan est en cours. Quitter quand même ?"):
                 return
             self.stop_event.set()
+            self.root.destroy()
+            # the scan's worker threads (DNS, HTTP, TLS) would keep Python alive until their requests
+            # end: leave now (the browser driver closes with its pipe)
+            os._exit(0)
         self.root.destroy()
 
 

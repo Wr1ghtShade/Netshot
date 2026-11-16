@@ -701,9 +701,9 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             log("[pivot] lecture des certificats impossible à travers le proxy : non lancée")
         else:
             own = set(own_domains)
-            added = await asyncio.to_thread(cert_pivot, hosts, own, ext, log)
+            added = await asyncio.to_thread(cert_pivot, hosts, own, ext, log, stop)
             known = {h.lower() for h in hosts + added}
-            added += await asyncio.to_thread(org_pivot, own, known, ext, log)
+            added += await asyncio.to_thread(org_pivot, own, known, ext, log, stop)
             own_domains = sorted(own)
             if getattr(args, "cloud_targets", True):
                 if excl and added:
@@ -770,7 +770,7 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
         on_progress(total, total, len(results))
     exposures = None
     if getattr(args, "enrich", False) and results and not (stop and stop.is_set()):
-        exposures = await asyncio.to_thread(enrich, results, getattr(args, "keys", None) or {}, log)
+        exposures = await asyncio.to_thread(enrich, results, getattr(args, "keys", None) or {}, log, stop)
         write_exposure_csv(exposures, args.output)
     reputation = None
     if getattr(args, "reputation", getattr(args, "enrich", False)) and results and not (stop and stop.is_set()):
@@ -784,7 +784,7 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
         targets = tls_targets_from_results(results)
         if targets:
             log(f"[tls] analyse de {len(targets)} service(s) https")
-            tls_results = await asyncio.to_thread(analyze_tls_all, targets, log, on_tls)
+            tls_results = await asyncio.to_thread(analyze_tls_all, targets, log, on_tls, stop)
             write_tls_csv(tls_results, args.output / "certificates.csv")
     inventory, groups = None, None
     args.takeovers = []
@@ -792,7 +792,7 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
         # the footprint needs the dangling CNAMEs even without the page analysis
         names = [h for h in hosts if not _is_ip(h)]
         if names:
-            args.takeovers = await asyncio.to_thread(check_takeover, names, {}, log)
+            args.takeovers = await asyncio.to_thread(check_takeover, names, {}, log, stop)
     if args.web is not None and results:
         groups = group_similar(results)
         if groups:
@@ -808,7 +808,7 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             for r in results:
                 if r.get("page_text") and r["host"].lower() not in pages:
                     pages[r["host"].lower()] = r["page_text"]
-            takeovers = await asyncio.to_thread(check_takeover, names, pages, log)
+            takeovers = await asyncio.to_thread(check_takeover, names, pages, log, stop)
         args.takeovers = takeovers
         inventory = tech_inventory(results)
         if getattr(args, "enrich", False) and not (stop and stop.is_set()):
@@ -816,7 +816,7 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
         write_tech_csv(inventory, args.output / "technologies.csv")
     takeovers = getattr(args, "takeovers", None) or []
     if cloud is not None and not (stop and stop.is_set()):
-        await asyncio.to_thread(finish_cloud, cloud, results, exposures, takeovers, log)
+        await asyncio.to_thread(finish_cloud, cloud, results, exposures, takeovers, log, stop)
         try:
             write_cloud_csv(cloud, args.output / "cloud.csv")
         except OSError as exc:

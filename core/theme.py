@@ -232,11 +232,13 @@ class ThemeManager:
         return DARK_COLORS.get(str(color).lower(), color) if self.dark else color
 
     def _walk(self, widget):
-        from .gui import ThinProgress  # avoid a circular import at load time
+        from .gui import ScrollCanvas, ThinProgress  # avoid a circular import at load time
         # widget._w, not str(widget): a ScrolledText reports the path of its outer frame
         d, dark, path = self.palette, self.dark, widget._w
         if isinstance(widget, ThinProgress):
             widget.set_colors(d["border"], d["accent"])
+        elif isinstance(widget, ScrollCanvas):
+            widget.configure(background=d["bg"])
         elif isinstance(widget, tk.Text):
             bg0 = self._keep((path, "bg"), widget.cget("background"))
             fg0 = self._keep((path, "fg"), widget.cget("foreground"))

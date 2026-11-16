@@ -92,11 +92,11 @@ def peek_cert(host):
     return names, orgs
 
 
-def cert_pivot(hosts, own, ext, log=print):
+def cert_pivot(hosts, own, ext, log=print, stop=None):
     """Reads the certificates of the targets; returns the names of the organisation's domains to add."""
     targets = hosts[:300]
     with ThreadPoolExecutor(32) as pool:
-        peeks = list(pool.map(peek_cert, targets))
+        peeks = list(pool.map(lambda h: ([], []) if stop and stop.is_set() else peek_cert(h), targets))
     known = {h.lower() for h in hosts}
     add, seen = [], set()
     for host, (names, orgs) in zip(targets, peeks):
@@ -132,28 +132,34 @@ def crtsh_org(org):
     return sorted(count, key=lambda d: (-count[d], d))
 
 
-def org_pivot(own, known, ext, log=print):
-    """crt.sh by organisation name (3 names at most); new domains to add (25 at most, those that resolve)."""
+def org_pivot(own, known, ext, log=print, stop=None):
+    """crt.sh by organisation name (3 names at most); new domains to add (25 at most, those that
+    resolve). A large organisation can have thousands of certified domains: 100 are examined at
+    most, resolved in parallel, and the report lists those 100 only."""
     add = []
     for o in ext["cert_orgs"][:3]:
+        if stop and stop.is_set():
+            break
         try:
             domains = crtsh_org(o)
         except (RuntimeError, OSError, ValueError) as exc:
             log(f"[pivot] crt.sh O={o} : {exc}")
             continue
+        fresh = [d for d in domains if d not in own and d not in known][:100]
+        with ThreadPoolExecutor(16) as pool:
+            alive = list(pool.map(lambda x: False if stop and stop.is_set() else _resolves(x), fresh))
         n = 0
-        for d in domains:
-            if d in own or d in known:
-                continue
+        for d, ok in zip(fresh, alive):
             p = {"name": d, "via": f"crt.sh O={o}", "added": False}
-            if n < 25 and _resolves(d):
+            if ok and n < 25:
                 p["added"] = True
                 add.append(d)
                 known.add(d)
                 own.add(d)
                 n += 1
             ext["org_domains"].append(p)
-        log(f"[pivot] crt.sh O={o} : {len(domains)} autre(s) domaine(s), {n} ajouté(s) au scan")
+        more = f" ({len(domains) - len(fresh)} déjà connus ou au-delà des 100 examinés)" if len(domains) > len(fresh) else ""
+        log(f"[pivot] crt.sh O={o} : {len(domains)} domaine(s){more}, {n} ajouté(s) au scan")
     return add
 
 
@@ -180,14 +186,14 @@ def org_terms(ext, cloud, own):
     return out
 
 
-def find_netblocks(ips, cloud_ips, terms, ext, log=print):
+def find_netblocks(ips, cloud_ips, terms, ext, log=print, stop=None):
     """RDAP record of the public IPs (40 at most): blocks whose name or holder matches the organisation."""
     from .whois import _vcard, _walk_entities, rdap_lookup
     if not terms:
         return
     seen, n = set(), 0
     for ip in ips:
-        if n >= 40:
+        if n >= 40 or (stop and stop.is_set()):
             break
         if ip in cloud_ips:
             continue
@@ -368,7 +374,7 @@ def _open(ip, port, timeout):
         return False
 
 
-def check_parity(names, ports, timeout, ext, log=print):
+def check_parity(names, ports, timeout, ext, log=print, stop=None):
     pairs = []
     for n in names:
         if len(pairs) >= 50:
@@ -391,7 +397,10 @@ def check_parity(names, ports, timeout, ext, log=print):
     log(f"[ipv6] parité IPv4 / IPv6 de {len(pairs)} nom(s) double pile sur {len(ports)} port(s)")
     jobs = [(ip, p) for _, v4, v6 in pairs for p in ports for ip in (v4, v6)]
     with ThreadPoolExecutor(64) as pool:
-        opened = {job for job, ok in zip(jobs, pool.map(lambda j: _open(j[0], j[1], timeout), jobs)) if ok}
+        opened = {job for job, ok in zip(jobs, pool.map(
+            lambda j: False if stop and stop.is_set() else _open(j[0], j[1], timeout), jobs)) if ok}
+    if stop and stop.is_set():
+        return
     for host, v4, v6 in pairs:
         v6_only = [p for p in ports if (v6, p) in opened and (v4, p) not in opened]
         v4_only = [p for p in ports if (v4, p) in opened and (v6, p) not in opened]
@@ -474,7 +483,7 @@ def run_extra_checks(args, hosts, ports, own_domains, cloud, ext, outdir, log=pr
     if pivot and ip_hosts and not (stop and stop.is_set()):
         cloud_ips = {x["ip"] for x in (cloud or {}).get("ips", [])}
         public = sorted(ip for ip in ip_hosts if not is_internal_ip(ip))
-        find_netblocks(public, cloud_ips, org_terms(ext, cloud, set(own_domains)), ext, log)
+        find_netblocks(public, cloud_ips, org_terms(ext, cloud, set(own_domains)), ext, log, stop)
     if udp and not (stop and stop.is_set()):
         if proxy:
             ext["udp_note"] = "sondes UDP impossibles à travers le proxy : non lancées"
@@ -484,11 +493,11 @@ def run_extra_checks(args, hosts, ports, own_domains, cloud, ext, outdir, log=pr
     if getattr(args, "ipv6_parity", True) and not proxy and not (stop and stop.is_set()):
         names = [h for h in hosts if not _is_ip(h)]
         if names:
-            check_parity(names, list(ports), getattr(args, "connect_timeout", 3), ext, log)
+            check_parity(names, list(ports), getattr(args, "connect_timeout", 3), ext, log, stop)
     token = (getattr(args, "keys", None) or {}).get("github", "")
     if token and own_domains and not (stop and stop.is_set()):
         search_github(sorted(own_domains), token, ext, log, stop)
-    if not extra_empty(ext):
+    if not extra_empty(ext) and outdir.exists():
         with open(outdir / "discovery.csv", "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerow(EXTRA_HEADER)

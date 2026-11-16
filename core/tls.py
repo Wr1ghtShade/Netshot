@@ -563,9 +563,11 @@ def grade_tls(r, f):
     return grade, f
 
 
-def analyze_tls_all(targets, log=print, each=None):
+def analyze_tls_all(targets, log=print, each=None, stop=None):
     """Analyze several targets in parallel; log one line per target and call each(result)."""
     def run(t):
+        if stop and stop.is_set():
+            return None
         start = datetime.now()
         try:
             r = analyze_tls(t)
@@ -585,7 +587,7 @@ def analyze_tls_all(targets, log=print, each=None):
         return r
 
     with ThreadPoolExecutor(max_workers=6) as pool:
-        return list(pool.map(run, targets))
+        return [r for r in pool.map(run, targets) if r is not None]
 
 
 def tls_targets_from_results(results):

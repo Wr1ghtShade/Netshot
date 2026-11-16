@@ -3,6 +3,36 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.11] - 2026-11-16
+
+### Corrigé
+- **Onglet Scan : colonne d'options tronquée** quand on dépliait « Réglages avancés » ou
+  « Périmètre et proxy », sans moyen de descendre, et dont la hauteur écrasait le journal et la
+  dernière capture. La colonne de droite défile maintenant (barre de défilement affichée seulement
+  quand le contenu dépasse, molette de la souris au-dessus de la colonne) et garde une largeur fixe
+  de 390 px : déplier un réglage ne change plus la mise en page. Au-dessus de la colonne, la
+  molette fait défiler au lieu de changer la valeur des listes et des compteurs.
+- **Journal et dernière capture plus hauts** sur l'onglet Scan : ils reçoivent 40 % de la hauteur
+  libre (contre 17 %), et la zone des cibles demande 4 lignes au lieu de 6 (elle grandit avec la
+  fenêtre).
+- **Bouton « Arrêter »** : plusieurs étapes ajoutées en 1.2.8 à 1.2.10 ignoraient la demande
+  d'arrêt et pouvaient tourner plusieurs minutes. L'arrêt est maintenant vérifié dans
+  l'enrichissement des IP, l'analyse TLS, le contrôle de prise de contrôle de sous-domaine,
+  l'empreinte cloud (sondes DNS, tenant Microsoft, téléchargement des plages), la lecture des
+  certificats, crt.sh par organisation, les blocs RDAP et la parité IPv6. Le journal note
+  « [stop] arrêt demandé » ; si l'arrêt dure, le statut indique toutes les 15 s qu'il attend la fin
+  des requêtes déjà envoyées.
+- **« Quitter » pendant un scan** : NetShot attendait la fin des requêtes en cours avant de se
+  fermer (les fils de travail de Python le retenaient). Il se ferme maintenant tout de suite.
+- **crt.sh par organisation** : 100 domaines nouveaux au plus sont examinés, résolus en parallèle
+  et listés (des milliers étaient résolus un par un pour une grande organisation).
+
+Vérifié : scan de démonstration arrêté au bout de 4 s, arrêt effectif en 1,5 s ; captures de
+l'onglet Scan à 800 et 1000 px de haut, réglages dépliés, thèmes clair et sombre.
+
+Fichiers : `core/gui.py`, `core/theme.py`, `core/scan.py`, `core/enrich.py`, `core/tls.py`,
+`core/recon.py`, `core/cloud.py`, `core/discover.py`, CHANGELOG.
+
 ## [1.2.10] - 2026-11-15
 
 ### Ajouté

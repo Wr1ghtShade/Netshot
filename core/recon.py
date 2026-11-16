@@ -364,13 +364,13 @@ def cname_chain(name, servers=None):
     return chain, True
 
 
-def check_takeover(hostnames, page_text_by_host, log=print):
+def check_takeover(hostnames, page_text_by_host, log=print, stop=None):
     """-> [{"host", "cname", "service", "reason", "level"}] for the names that look takeable."""
     from concurrent.futures import ThreadPoolExecutor
     servers = _dns_servers()
     names = sorted({h.lower().rstrip(".") for h in hostnames})
     with ThreadPoolExecutor(max_workers=16) as pool:
-        chains = list(pool.map(lambda n: cname_chain(n, servers), names))
+        chains = list(pool.map(lambda n: ([], False) if stop and stop.is_set() else cname_chain(n, servers), names))
     out = []
     for name, (chain, exists) in zip(names, chains):
         if not chain:

@@ -139,7 +139,7 @@ def kev_count(e):
     return sum(v["kev"] for v in e["vulns"])
 
 
-def enrich(results, keys, log=print):
+def enrich(results, keys, log=print, stop=None):
     """Look up every IP behind the scanned hosts. Returns a list of exposure dicts."""
     hosts = sorted({r["host"] for r in results})
     by_ip = {}
@@ -159,6 +159,8 @@ def enrich(results, keys, log=print):
         f"{'Shodan (clé)' if shodan_key else 'Shodan InternetDB'}{', LeakIX' if leak_key else ''}")
 
     def one(e):
+        if stop and stop.is_set():  # Arrêter: the lookups not started yet are skipped
+            return
         e["ptr"] = _ptr(e["ip"])
         if e["internal"]:
             return  # never send internal addresses to third parties
@@ -178,7 +180,8 @@ def enrich(results, keys, log=print):
 
     with ThreadPoolExecutor(max_workers=16) as pool:
         list(pool.map(one, exps))
-    _rank_vulns(exps, log)
+    if not (stop and stop.is_set()):
+        _rank_vulns(exps, log)
     return exps
 
 

@@ -549,12 +549,16 @@ def discover_cloud(hosts, log=print, stop=None):
                                    "region": "", "auth": "messagerie Google (MX)", "idp": "", "brand": "",
                                    "domains": []})
         for p in PROBE_NAMES:
+            if stop and stop.is_set():
+                break
             name = f"{p}.{d}"
             for c in cname_chain(name, servers)[0]:
                 m = match_sig("CNAME", c)
                 if m:
                     add_service(_svc(m, "CNAME", name, c.rstrip(".")))
                     break
+        if stop and stop.is_set():
+            break
         try:
             t = microsoft_tenant(d)
         except (urllib.error.URLError, OSError, ValueError) as exc:
@@ -580,7 +584,7 @@ def discover_cloud(hosts, log=print, stop=None):
     return rep, full, web
 
 
-def finish_cloud(rep, results, exposures, takeovers, log=print):
+def finish_cloud(rep, results, exposures, takeovers, log=print, stop=None):
     """After the scan: CNAME of every scanned name, provider of every public IP, dangling CNAMEs."""
     from .recon import _dns_servers, cname_chain
     if rep is None:
@@ -593,7 +597,7 @@ def finish_cloud(rep, results, exposures, takeovers, log=print):
             names.append(h)
     servers = _dns_servers()
     with ThreadPoolExecutor(16) as pool:
-        chains = list(pool.map(lambda n: cname_chain(n, servers)[0], names))
+        chains = list(pool.map(lambda n: [] if stop and stop.is_set() else cname_chain(n, servers)[0], names))
     for n, chain in zip(names, chains):
         for c in chain:
             m = match_sig("CNAME", c)
@@ -617,7 +621,7 @@ def finish_cloud(rep, results, exposures, takeovers, log=print):
         h = r["host"].strip("[]")
         if _is_ip(h) and not is_internal_ip(h):
             hosts_of.setdefault(h, [])
-    if hosts_of:
+    if hosts_of and not (stop and stop.is_set()):
         ranges = load_ranges(log)
         for ip, hs in hosts_of.items():
             m = match_range(ranges, ip)
