@@ -3,6 +3,26 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.16] - 2026-11-16
+
+### Ajouté
+- **Mode furtif** (`--stealth`), pour tester la détection du client (IDS, WAF, SOC) lors d'un
+  audit autorisé :
+  - 1 vérification à la fois ; pause aléatoire avant chaque connexion TCP (`--stealth-delay`,
+    3-8 s par défaut, « 5 » pour une pause fixe), interrompue aussitôt par « Arrêter » ;
+  - hôtes et ports testés dans un ordre aléatoire (pas de balayage séquentiel d'un hôte) ;
+  - pause entre deux pages au moins égale à la pause maximale ;
+  - User-Agent Chrome Windows ordinaire au lieu de celui du navigateur sans interface
+    (« HeadlessChrome », vérifié sur un serveur de test), aucun User-Agent de robot ;
+  - coupés : dossiers, fichiers sensibles, sonde WAF, UDP, analyse TLS, parité IPv6, lecture des
+    certificats des cibles ; le journal liste ce qui a été coupé ;
+  - inchangés : les recherches qui ne touchent pas la cible (enrichissement, réputation, empreinte
+    cloud, crt.sh, RDAP) ;
+  - durée estimée des tests de ports dans le journal ; confirmation demandée au-delà de 2 h.
+- Interface : cadre « MODE FURTIF » au-dessus d'ANALYSE PASSIVE, avec le champ de pause ; les options coupées sont grisées.
+
+Fichiers : `core/stealth.py` (nouveau), `core/scan.py`, `core/gui.py`, README, CHANGELOG.
+
 ## [1.2.15] - 2026-11-16
 
 ### Corrigé

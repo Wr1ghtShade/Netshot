@@ -37,6 +37,7 @@ from . import scan as netshot
 from . import sources
 from .criminalip import DEFAULT_DOMAINS as CIP_DEFAULT_DOMAINS, DEFAULT_IPS as CIP_DEFAULT_IPS
 from .sources import registrable_domain
+from .stealth import estimate as stealth_estimate, fmt_duration, parse_stealth_delay
 from . import theme
 from . import tls as netshot_tls
 
@@ -409,12 +410,29 @@ class NetshotApp:
         self.side_area.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
         side = self.side_area.inner
 
+        self.option_buttons = {}
+
         def option(parent, var, title, detail, active=False):
             box = ttk.Frame(parent)
             box.pack(fill="x", pady=(4, 2))
-            ttk.Checkbutton(box, text=title, variable=var,
-                            style="Active.TCheckbutton" if active else "TCheckbutton").pack(anchor="w")
+            btn = ttk.Checkbutton(box, text=title, variable=var,
+                                  style="Active.TCheckbutton" if active else "TCheckbutton")
+            btn.pack(anchor="w")
             ttk.Label(box, text=detail, style="Muted.TLabel").pack(anchor="w", padx=(22, 0))
+            self.option_buttons[str(var)] = btn
+            return box
+
+        # Stealth mode: for an authorised test of the client's detection (IDS, WAF, SOC)
+        stealth = ttk.LabelFrame(side, text="MODE FURTIF", padding=(10, 4, 10, 8))
+        stealth.pack(fill="x", pady=(0, 8))
+        self.stealth = tk.BooleanVar(value=False)
+        self.stealth_delay = tk.StringVar(value="3-8")
+        option(stealth, self.stealth, "Lent et discret", "1 test à la fois, pauses et ordre aléatoires, "
+                                                          "UA Chrome")
+        self.stealth_row = ttk.Frame(stealth)
+        ttk.Label(self.stealth_row, text="Pause avant chaque connexion (s, min-max)", style="Muted.TLabel").pack(side="left")
+        ttk.Entry(self.stealth_row, textvariable=self.stealth_delay, width=7).pack(side="left", padx=(6, 0))
+        self.stealth.trace_add("write", lambda *_: self.apply_stealth_ui())
 
         passive = ttk.LabelFrame(side, text="ANALYSE PASSIVE", style="Passive.TLabelframe", padding=(10, 4, 10, 8))
         passive.pack(fill="x")
@@ -525,6 +543,7 @@ class NetshotApp:
             var.trace_add("write", lambda *a: self.update_fold_summaries())
         self.update_fold_summaries()
         self.side_area.protect_fields()
+        self.apply_stealth_ui()
 
         # --- Action bar: always visible at the bottom of the tab
         actions = ttk.Frame(main, padding=(0, 8, 0, 0))
@@ -1445,6 +1464,11 @@ class NetshotApp:
             messagebox.showerror("NetShot", f"Proxy invalide : {exc}")
             return
         exclusions = read_exclusions([self.exclude.get()])
+        try:
+            stealth_delay = parse_stealth_delay(self.stealth_delay.get())
+        except ValueError as exc:
+            messagebox.showerror("NetShot", str(exc))
+            return
 
         if any(sources.ASN_RE.match(i.split("#", 1)[0].strip()) for i in items):
             self.status.set("Lecture des plages des AS (RIPEstat)…")
@@ -1456,8 +1480,15 @@ class NetshotApp:
             return
         hosts = netshot.parse_targets(items)
         user_agents = self.selected_uas()
-        if len(hosts) * len(ports) > 5000 and not messagebox.askyesno(
-                "netshot", f"{len(hosts)} hôtes x {len(ports)} ports = {len(hosts) * len(ports)} tests.\nContinuer ?"):
+        checks = len(hosts) * len(ports)
+        if self.stealth.get():
+            duration = stealth_estimate(checks, stealth_delay)
+            if duration > 7200 and not messagebox.askyesno(
+                    "NetShot", f"Mode furtif : {len(hosts)} hôtes x {len(ports)} ports = environ {fmt_duration(duration)} "
+                               "rien que pour les tests de ports.\nContinuer ?"):
+                return
+        elif checks > 5000 and not messagebox.askyesno(
+                "netshot", f"{len(hosts)} hôtes x {len(ports)} ports = {checks} tests.\nContinuer ?"):
             return
 
         # One sub-folder per scan so results never overwrite each other, named after the domain
@@ -1468,7 +1499,8 @@ class NetshotApp:
                                width=width, height=height, enrich=self.enrich.get(),
                                reputation=self.reputation.get(), cloud=self.cloud.get(),
                                cloud_targets=True, pivot=self.pivot.get(), ipv6_parity=self.ipv6_parity.get(),
-                               udp=self.udp.get(), keys=dict(self.keys),
+                               udp=self.udp.get(), keys=dict(self.keys), stealth=self.stealth.get(),
+                               stealth_delay=stealth_delay,
                                tls=self.tls_scan.get(), label=self.label_shots.get(),
                                dirs=dir_words() if self.probe_dirs.get() else None,
                                proxy=proxy, exclusions=exclusions,
@@ -1518,6 +1550,18 @@ class NetshotApp:
         self.status.set("Arrêt en cours (fin des pages déjà ouvertes)…")
         self.write_log("[stop] arrêt demandé : les étapes en cours se terminent, les suivantes sont sautées")
         self.root.after(15000, self._stop_watch, 15)
+
+    def apply_stealth_ui(self):
+        """Stealth mode locks the noisy options off (the scan drops them anyway)."""
+        on = self.stealth.get()
+        if on:
+            self.stealth_row.pack(fill="x", pady=(2, 0))
+        else:
+            self.stealth_row.pack_forget()
+        for var in (self.probe_dirs, self.probe_files, self.waf_probe, self.udp, self.tls_scan, self.ipv6_parity):
+            btn = self.option_buttons.get(str(var))
+            if btn is not None:
+                btn.state(["disabled"] if on else ["!disabled"])
 
     def _stop_watch(self, waited):
         """Tells the user what the stop waits for when it takes long (a request already sent cannot

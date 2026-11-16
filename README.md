@@ -31,7 +31,8 @@ netshot/
 │   ├── reputation.py     réputation des noms : résolveurs filtrants, URLhaus, Criminal IP
 │   ├── criminalip.py     Criminal IP : analyse de domaine et score des IP (crédits plafonnés)
 │   ├── cloud.py          empreinte cloud et SaaS : tenant M365, SaaS, plages AWS / Azure / GCP
-│   └── discover.py       certificats, crt.sh, blocs RDAP, UDP, IPv6, GitHub, « Top risques »
+│   ├── discover.py       certificats, crt.sh, blocs RDAP, UDP, IPv6, GitHub, « Top risques »
+│   └── stealth.py        mode furtif
 ├── assets/               icon.png, icon-32.png (logo radar), subdomains.txt (dictionnaire DNS), dirs.txt (dossiers courants), files.txt (fichiers sensibles)
 ├── examples/             targets.example.txt
 └── screenshots/          sorties de l'interface graphique
@@ -332,6 +333,25 @@ Les ajouts au scan suivent les mêmes règles que l'empreinte cloud : seuls les 
 fichier d'exclusions appliqué, `--no-cloud-targets` pour ne rien ajouter. Sections du rapport,
 `discovery.csv`, onglet « Découverte » de `results.xlsx`, clé `discovery` de `results.json`.
 
+### 🥷 Mode furtif
+
+Pour tester la détection du client (IDS, WAF, SOC) dans le cadre d'un audit **autorisé** :
+`--stealth` (ou « Mode furtif » dans l'interface) fait le scan le plus lent et le plus discret
+possible.
+
+| Réglage | Mode normal | Mode furtif |
+|---|---|---|
+| Vérifications en parallèle | 10 | **1** |
+| Pause avant chaque connexion TCP | aucune | **aléatoire, 3 à 8 s** (`--stealth-delay 3-8`) |
+| Ordre des tests | hôte par hôte, port par port | **hôtes et ports mélangés** |
+| Pause entre deux pages | `--d` | au moins la pause maximale |
+| User-Agent | celui du navigateur sans interface (« HeadlessChrome ») ou ceux choisis | **Chrome Windows ordinaire**, aucun robot |
+| Dossiers, fichiers sensibles, sonde WAF, UDP, analyse TLS, parité IPv6, lecture des certificats | selon les options | **coupés** |
+| Enrichissement, réputation, empreinte cloud, crt.sh, RDAP (ne touchent pas la cible) | selon les options | inchangés |
+
+Le journal annonce la durée estimée des seuls tests de ports (au-delà de 2 h, l'interface demande
+confirmation). Exemple : 1 hôte x 5 ports ≈ 30 s ; un /24 x 5 ports ≈ 2 h 20 min.
+
 ### 🎯 Top risques
 
 En tête du rapport, les constats de tous les contrôles classés par gravité (10 premiers, constats
@@ -454,6 +474,8 @@ Chaque scan crée un sous-dossier `scan_<domaine>_<date>` (ex. `scan_guifort.ovh
 | `--no-pivot` | ne lit pas les certificats et ne cherche ni crt.sh par organisation ni les blocs d'IP | découverte active |
 | `--udp` | sondes UDP (DNS, NTP, SNMP, IKE, OpenVPN, SSDP) | inactif |
 | `--no-ipv6-parity` | ne compare pas les ports en IPv4 et en IPv6 | parité active |
+| `--stealth` | mode furtif (voir plus haut) | inactif |
+| `--stealth-delay MIN-MAX` | pause aléatoire avant chaque connexion en mode furtif, en secondes | 3-8 |
 | `--criminalip-ips N` | IP publiques vérifiées par Criminal IP à chaque scan (clé `criminalip`) ; 0 = aucune | 5 |
 | `--criminalip-domains N` | domaines analysés par Criminal IP à chaque scan ; 0 = aucun | 1 |
 | `--no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires) | analyse active |

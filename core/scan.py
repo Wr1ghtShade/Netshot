@@ -45,6 +45,8 @@ import csv
 import html
 import ipaddress
 import re
+import random
+import time
 import sys
 import urllib.parse
 from datetime import datetime
@@ -62,6 +64,7 @@ from .webinfo import (TAGS, WEB_CSS, card_extras, detect_tech, dir_words, probe_
 from .enrich import vuln_badges
 from .export import build_sheets, write_json, write_xlsx
 from .pagecheck import PAGE_RESOURCES_JS, analyze_resources, detect_waf, page_checks_section, page_issues, probe_waf
+from .stealth import apply_stealth, estimate as stealth_estimate, fmt_duration, parse_stealth_delay, pick as stealth_pick
 from .cloud import cloud_domains, cloud_section, discover_cloud, finish_cloud, write_cloud_csv
 from .discover import (cert_pivot, collect_risks, extra_sections, new_extra, org_pivot, risks_section,
                        run_extra_checks)
@@ -344,6 +347,11 @@ class RateLimiter:
 
 async def process(host, port, args, contexts, sem, results, counter, log, stop, limiter, on_shot):
     async with sem:
+        if getattr(args, "stealth", False) and not (stop and stop.is_set()):
+            # random pause before the connection, cut short by Arrêter
+            end = time.monotonic() + stealth_pick(args.stealth_delay)
+            while time.monotonic() < end and not (stop and stop.is_set()):
+                await asyncio.sleep(min(0.5, end - time.monotonic()))
         proxy = getattr(args, "proxy", None)
         if proxy and proxy["scheme"] == "socks5":
             is_open = await socks5_port_open(proxy, host, port, args.connect_timeout + 2)
@@ -677,6 +685,8 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
     optional callbacks (used by the GUI)."""
     if async_playwright is None:
         raise RuntimeError(PLAYWRIGHT_MISSING)
+    if getattr(args, "stealth", False):
+        apply_stealth(args, BROWSER_UAS, log)
     excl = getattr(args, "exclusions", None)
     if excl:
         hosts = await asyncio.to_thread(excl.filter, hosts, log)
@@ -701,7 +711,9 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             log("[pivot] lecture des certificats impossible à travers le proxy : non lancée")
         else:
             own = set(own_domains)
-            added = await asyncio.to_thread(cert_pivot, hosts, own, ext, log, stop)
+            # stealth: no extra handshake on the targets
+            added = [] if getattr(args, "stealth", False) else await asyncio.to_thread(cert_pivot, hosts, own, ext, log,
+                                                                                      stop)
             known = {h.lower() for h in hosts + added}
             added += await asyncio.to_thread(org_pivot, own, known, ext, log, stop)
             own_domains = sorted(own)
@@ -749,6 +761,10 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
         tasks = [process(h, p, saas_args if h in web_only else args, contexts, sem, results, counter, log, stop,
                          limiter, on_shot)
                  for h in hosts for p in (web_ports if h in web_only else ports)]
+        if getattr(args, "stealth", False):
+            random.shuffle(tasks)  # under a semaphore of 1, the list order is the order of the checks
+            log(f"[furtif] {len(tasks)} vérification(s) : environ "
+                f"{fmt_duration(stealth_estimate(len(tasks), args.stealth_delay))} pour les seuls tests de ports")
 
         async def progress():
             while counter["done"] < total:
@@ -878,6 +894,12 @@ def main():
     ap.add_argument("--no-cloud", action="store_true",
                     help="do not look for the cloud and SaaS footprint of the domains (Microsoft 365 tenant, SaaS, "
                          "AWS / Azure / GCP / Cloudflare IPs)")
+    ap.add_argument("--stealth", action="store_true",
+                    help="stealth mode: one check at a time, random pause before each connection, random order, "
+                         "browser User-Agent; no folders, files, WAF probe, UDP, TLS analysis, IPv6 parity nor "
+                         "certificate pivot")
+    ap.add_argument("--stealth-delay", default="3-8", metavar="MIN-MAX",
+                    help="stealth mode: random pause before each TCP connection, in seconds (default: 3-8)")
     ap.add_argument("--no-pivot", action="store_true",
                     help="do not read the certificate names of the targets nor search crt.sh and RDAP for the "
                          "organisation")
@@ -1004,6 +1026,10 @@ def main():
     args.cloud = not args.no_cloud
     args.cloud_targets = not args.no_cloud_targets
     args.pivot = not args.no_pivot
+    try:
+        args.stealth_delay = parse_stealth_delay(args.stealth_delay)
+    except ValueError as exc:
+        ap.error(str(exc))
     args.ipv6_parity = not args.no_ipv6_parity
     args.analyze = not args.no_analyze
     try:
