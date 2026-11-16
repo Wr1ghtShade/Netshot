@@ -206,7 +206,8 @@ class ThemeManager:
                     darkcolor=d["bg"], padding=(0, 2), anchor="w", font=("Segoe UI", 9, "bold"))
         s.map("Fold.TButton", background=[("active", d["bg"])], foreground=[("active", d["accent"])])
         s.configure("Chip.Toolbutton", background=d["field"], foreground=d["muted"], bordercolor=d["border"],
-                    lightcolor=d["field"], darkcolor=d["field"], padding=(10, 3), relief="solid", borderwidth=1)
+                    lightcolor=d["field"], darkcolor=d["field"], padding=(6, 1), relief="solid", borderwidth=1,
+                    font=("Segoe UI", 8))
         s.map("Chip.Toolbutton", background=[("selected", d["accent_soft"]), ("active", d["hover"])],
               foreground=[("selected", d["accent"]), ("active", d["fg"])],
               bordercolor=[("selected", d["accent"])])

@@ -3,6 +3,21 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.12] - 2026-11-16
+
+### Modifié
+- **Boutons d'user agent plus compacts** (onglet Scan) : 5 par ligne au lieu de 4, marge
+  intérieure 6 x 1 px au lieu de 10 x 3, police 8 pt : 3 lignes au lieu de 4 pour les 17 user
+  agents. Les boutons de choix des ports (Défaut, Web étendu…) partagent ce style et rétrécissent
+  aussi.
+- **Journal plus haut** : il demande 12 lignes au lieu de 5 ; la place gagnée sur les boutons lui
+  revient (environ 170 px de journal et de dernière capture à 800 px de haut, contre 110 px), la
+  zone des cibles gardant ses 4 lignes minimum.
+
+Vérifié : onglets Scan (800 et 1000 px, réglages dépliés) et DNS (800 px).
+
+Fichiers : `core/gui.py`, `core/theme.py`, CHANGELOG.
+
 ## [1.2.11] - 2026-11-16
 
 ### Corrigé

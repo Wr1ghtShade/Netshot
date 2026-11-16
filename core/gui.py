@@ -279,7 +279,7 @@ class NetshotApp:
         log_box.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
         # Reset of the log also clears the last capture
         self._tool_buttons(log_box, lambda: self.log.get("1.0", "end"), self.reset_bottom).pack(anchor="e")
-        self.log = scrolledtext.ScrolledText(log_box, height=5, width=50, font=("Consolas", 9), state="disabled",
+        self.log = scrolledtext.ScrolledText(log_box, height=12, width=50, font=("Consolas", 9), state="disabled",
                                              relief="flat", padx=8, pady=6)
         self.log.is_log = True  # dark console in both themes (theme.py)
         self.log.tag_configure("err", foreground="#f87171")
@@ -375,8 +375,8 @@ class NetshotApp:
             kind = "bot" if name in netshot.BOT_UAS else "nav"
             self.ua_vars[name] = tk.BooleanVar(value=False)
             ttk.Checkbutton(ua_box, text=f"{name}  {kind}", variable=self.ua_vars[name], style="Chip.Toolbutton",
-                            command=self.update_ua_count).grid(row=i // 4, column=i % 4, sticky="ew", padx=(0, 4), pady=2)
-        for col in range(4):
+                            command=self.update_ua_count).grid(row=i // 5, column=i % 5, sticky="ew", padx=(0, 3), pady=1)
+        for col in range(5):
             ua_box.columnconfigure(col, weight=1, uniform="ua")
         self.custom_ua = tk.StringVar()
         custom = ttk.Frame(left)
