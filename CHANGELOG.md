@@ -3,6 +3,22 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.17] - 2026-11-16
+
+### Modifié
+- **Onglet DNS : serveur 1.1.1.1 par défaut** (au lieu des résolveurs du système) et liste des
+  résolveurs publics connus, en IPv4 et en IPv6 : Cloudflare (1.1.1.1, 1.0.0.1,
+  2606:4700:4700::1111 / ::1001), Google (8.8.8.8, 8.8.4.4, 2001:4860:4860::8888 / ::8844),
+  Quad9 filtrant et sans filtrage (9.9.9.9, 149.112.112.112, 9.9.9.10, 2620:fe::fe, 2620:fe::10),
+  OpenDNS (208.67.222.222, 208.67.220.220, 2620:119:35::35), AdGuard sans filtrage
+  (94.140.14.140, 2a10:50c0::1:ff), FDN (80.67.169.12, 2001:910:800::12), Mullvad (194.242.2.2,
+  2a07:e340::2), et « Système » pour les résolveurs de la machine. liste déroulante modifiable ; toute autre adresse
+  reste possible (10.0.0.1, [2001:db8::1]:5353). Les résolveurs filtrants sont signalés : ils
+  peuvent masquer la réponse d'un domaine malveillant.
+- La ligne de commande garde les résolveurs du système par défaut.
+
+Fichiers : `core/gui.py`, CHANGELOG.
+
 ## [1.2.16] - 2026-11-16
 
 ### Ajouté

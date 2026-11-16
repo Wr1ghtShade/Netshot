@@ -69,6 +69,42 @@ LEAK_DATA_COLS = {"email": ("E-mail", 220), "username": ("Identifiant", 120), "p
 LEAK_MASK = "••••••••"  # fixed length: the length of a password is information too
 
 
+# Public resolvers offered in the DNS tab (the field stays editable: any server, port included)
+DNS_SERVERS = [
+    "Système (résolveurs de la machine)",
+    "1.1.1.1 (Cloudflare)",
+    "1.0.0.1 (Cloudflare)",
+    "2606:4700:4700::1111 (Cloudflare IPv6)",
+    "2606:4700:4700::1001 (Cloudflare IPv6)",
+    "8.8.8.8 (Google)",
+    "8.8.4.4 (Google)",
+    "2001:4860:4860::8888 (Google IPv6)",
+    "2001:4860:4860::8844 (Google IPv6)",
+    "9.9.9.9 (Quad9, filtrant)",
+    "149.112.112.112 (Quad9, filtrant)",
+    "2620:fe::fe (Quad9 IPv6, filtrant)",
+    "9.9.9.10 (Quad9 sans filtrage)",
+    "2620:fe::10 (Quad9 IPv6 sans filtrage)",
+    "208.67.222.222 (OpenDNS)",
+    "208.67.220.220 (OpenDNS)",
+    "2620:119:35::35 (OpenDNS IPv6)",
+    "94.140.14.140 (AdGuard sans filtrage)",
+    "2a10:50c0::1:ff (AdGuard IPv6 sans filtrage)",
+    "80.67.169.12 (FDN)",
+    "2001:910:800::12 (FDN IPv6)",
+    "194.242.2.2 (Mullvad)",
+    "2a07:e340::2 (Mullvad IPv6)",
+]
+
+
+def dns_server_value(text):
+    """"1.1.1.1 (Cloudflare)" -> "1.1.1.1"; "Système…" or empty -> "" (system resolvers)."""
+    text = (text or "").strip()
+    if not text or text.lower().startswith("syst"):
+        return ""
+    return text.split(" (", 1)[0].strip()
+
+
 def _int_or(var, default):
     """An IntVar's value (>= 0), the default when the field holds no number."""
     try:
@@ -609,11 +645,12 @@ class NetshotApp:
         entry.grid(row=0, column=1, sticky="ew", padx=4)
         entry.bind("<Return>", lambda e: self.dns_run())
         ttk.Label(tab, text="Serveur :").grid(row=0, column=2, sticky="w", padx=(8, 0))
-        self.dns_server = tk.StringVar()
-        ttk.Entry(tab, textvariable=self.dns_server, width=18).grid(row=0, column=3, padx=4)
+        self.dns_server = tk.StringVar(value=DNS_SERVERS[1])  # 1.1.1.1 (Cloudflare)
+        ttk.Combobox(tab, textvariable=self.dns_server, values=DNS_SERVERS, width=34).grid(row=0, column=3, padx=4)
         self.dns_btn = ttk.Button(tab, style="Primary.TButton", text="Interroger", command=self.dns_run)
         self.dns_btn.grid(row=0, column=4)
-        ttk.Label(tab, style="Hint.TLabel", wraplength=1050, text="Serveur vide = résolveurs du système. "
+        ttk.Label(tab, style="Hint.TLabel", wraplength=1050, text="Serveur : 1.1.1.1 par défaut, un résolveur public de la liste (IPv4 ou IPv6), "
+                  "« Système » pour ceux de la machine, ou toute adresse saisie (10.0.0.1, [2001:db8::1]:5353). "
                   "Une requête ANY est tentée, mais la plupart des serveurs la refusent (RFC 8482) : chaque type "
                   "est aussi interrogé un par un (A, AAAA, NS, SOA, MX, TXT, CAA, DS, DNSKEY, HTTPS, DMARC, "
                   "MTA-STS, SRV Active Directory et Microsoft 365…).").grid(row=1, column=0, columnspan=5, sticky="w", pady=(6, 0))
@@ -1253,7 +1290,7 @@ class NetshotApp:
     # --- DNS --------------------------------------------------------------
 
     def dns_run(self):
-        domain, server = self.dns_domain.get().strip(), self.dns_server.get().strip()
+        domain, server = self.dns_domain.get().strip(), dns_server_value(self.dns_server.get())
         if not sources.normalize_domain(domain):
             messagebox.showwarning("NetShot", "Indique un domaine.")
             return
