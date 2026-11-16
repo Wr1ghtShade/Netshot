@@ -15,6 +15,7 @@ import ipaddress
 import os
 import queue
 import re
+import subprocess
 import sys
 import threading
 import tkinter as tk
@@ -1481,7 +1482,12 @@ class NetshotApp:
         self.start_btn.configure(state="disabled")
         self.stop_btn.configure(state="normal")
         self.report_btn.configure(state="disabled")
-        self.folder_btn.configure(state="disabled")
+        # the scan folder exists from the start: it can be opened while the captures arrive
+        try:
+            output.mkdir(parents=True, exist_ok=True)
+            self.folder_btn.configure(state="normal")
+        except OSError:
+            self.folder_btn.configure(state="disabled")
         self.progress.configure(value=0)
         self.write_log(f"=== {len(hosts)} hôtes x {len(ports)} ports x {len(user_agents)} UA, "
                        f"{width}x{height} -> {output}")
@@ -1538,18 +1544,33 @@ class NetshotApp:
 
     @staticmethod
     def open_path(path):
-        if os.name == "nt":
-            os.startfile(path)
-        else:
-            webbrowser.open(path.as_uri())
+        """Opens a file or folder with the system (Explorer on Windows); reports a failure instead
+        of doing nothing."""
+        path = Path(path).resolve()
+        try:
+            if os.name == "nt":
+                os.startfile(str(path))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as exc:
+            messagebox.showerror("NetShot", f"Impossible d'ouvrir :\n{path}\n\n{exc}")
 
     def open_report(self):
         if self.report and self.report.exists():
             self.open_path(self.report)
+        elif self.report:
+            messagebox.showinfo("NetShot", "Le rapport n'est pas encore écrit (il l'est à la fin du scan).\n"
+                                           "« Ouvrir le dossier » montre les captures déjà prises.")
 
     def open_folder(self):
-        if self.report and self.report.parent.exists():
-            self.open_path(self.report.parent)
+        folder = self.report.parent if self.report else None
+        while folder is not None and not folder.exists() and folder != folder.parent:
+            folder = folder.parent  # the scan folder may not exist yet: its parent
+        if folder is None or not folder.exists():
+            folder = Path(self.outdir.get() or ".")
+        self.open_path(folder)
 
     def on_close(self):
         if self.worker and self.worker.is_alive():

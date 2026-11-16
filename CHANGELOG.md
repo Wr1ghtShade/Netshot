@@ -3,6 +3,19 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.15] - 2026-11-16
+
+### Corrigé
+- **« Ouvrir le dossier » grisé pendant le scan** : le dossier du scan est créé dès le lancement et
+  le bouton est actif tout de suite, pour regarder les captures au fur et à mesure. Il reste actif
+  après un scan arrêté. « Ouvrir le rapport » s'active à la fin, quand le rapport est écrit.
+- « Ouvrir le dossier » / « Ouvrir le rapport » ne faisaient rien quand le dossier ou le rapport
+  n'existaient pas encore : le chemin est rendu absolu, le dossier le plus proche qui existe est
+  ouvert, et un message explique que le rapport n'est écrit qu'à la fin du scan. Une erreur
+  d'ouverture est affichée au lieu d'être ignorée (Linux : `xdg-open`, macOS : `open`).
+
+Fichiers : `core/gui.py`, CHANGELOG.
+
 ## [1.2.14] - 2026-11-16
 
 ### Corrigé
