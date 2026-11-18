@@ -3,6 +3,26 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.20] - 2026-11-18
+
+### Ajouté
+- **Export DefectDojo** : chaque scan écrit `defectdojo.json` au format « Generic Findings
+  Import » (champs vérifiés contre la liste des champs acceptés par le parseur de DefectDojo,
+  `dojo/tools/generic/json_parser.py`) :
+  - une finding par CVE et par IP (Shodan InternetDB) et par CVE et technologie (NVD), avec la
+    CVE, le lien NVD, KEV / CVSS / EPSS dans la description, le composant et sa version ;
+    gravité : Critical (KEV ou CVSS ≥ 9), High (CVSS ≥ 7 ou EPSS ≥ 50 %), Medium (CVSS ≥ 4 ou sans
+    score), Low ;
+  - une finding par constat du « Top risques » (hors CVE), avec la section du rapport en
+    `vuln_id_from_tool` et en étiquette ;
+  - une finding par fichier exposé de gravité moyenne ou info ;
+  - endpoints renseignés (URL, nom, IP ; IPv6 entre crochets) ; titre limité à 500 caractères ;
+  - `unique_id_from_tool` stable d'un scan à l'autre et identique entre NetShot Go et Python,
+    pour que la réimportation ferme ce qui a été corrigé.
+- README : import par l'interface et par l'API (`import-scan`, `reimport-scan`).
+
+Fichiers : `core/defectdojo.py` (nouveau), `core/scan.py`, README, CHANGELOG.
+
 ## [1.2.19] - 2026-11-18
 
 ### Modifié

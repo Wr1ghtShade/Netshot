@@ -65,6 +65,7 @@ from .enrich import vuln_badges
 from .export import build_sheets, write_json, write_xlsx
 from .pagecheck import PAGE_RESOURCES_JS, analyze_resources, detect_waf, page_checks_section, page_issues, probe_waf
 from .stealth import apply_stealth, estimate as stealth_estimate, fmt_duration, parse_stealth_delay, pick as stealth_pick
+from .defectdojo import build_defectdojo, write_defectdojo
 from .cloud import cloud_domains, cloud_section, discover_cloud, finish_cloud, write_cloud_csv
 from .discover import (cert_pivot, collect_risks, extra_sections, new_extra, org_pivot, risks_section,
                        run_extra_checks)
@@ -848,6 +849,11 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             log(f"[cloud] {exc}")
     if not (stop and stop.is_set()):
         await asyncio.to_thread(run_extra_checks, args, hosts, ports, own_domains, cloud, ext, args.output, log, stop)
+    try:
+        write_defectdojo(args.output, build_defectdojo(results, exposures, tls_results, inventory, takeovers,
+                                                       reputation, cloud, ext))
+    except OSError as exc:
+        log(f"[defectdojo] {exc}")
     write_reports(results, args.output, exposures, tls_results, inventory, groups, takeovers, reputation, cloud, ext)
     write_json(args.output / "results.json", results, exposures, tls_results, inventory, groups, takeovers, reputation,
                cloud, ext, collect_risks(results, exposures, tls_results, takeovers, reputation, cloud, ext))
