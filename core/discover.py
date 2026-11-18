@@ -3,8 +3,8 @@ core/discover.py - wider discovery around the scanned organisation and "Top risq
 Same behaviour as discover.go and risks.go (netshot-go):
 
 - certificate pivot: names of the certificates served on 443 by the targets (SAN); those of the
-  organisation's domains are added to the scan. The organisation names (O=) of these certificates
-  are searched in crt.sh: the domains certified under the same name are added too.
+  scanned domains are added to the scan. The organisation names (O=) of these certificates are
+  searched in crt.sh: the domains certified under the same name are listed, never added.
 - IP blocks registered to the organisation (RDAP of the public IPs found): listed, never added.
 - UDP (--udp, active): DNS (open resolver), NTP, SNMP (v3 discovery, no community tried), IKE,
   OpenVPN, SSDP on each target IP.
@@ -133,10 +133,9 @@ def crtsh_org(org):
 
 
 def org_pivot(own, known, ext, log=print, stop=None):
-    """crt.sh by organisation name (3 names at most); new domains to add (25 at most, those that
-    resolve). A large organisation can have thousands of certified domains: 100 are examined at
-    most, resolved in parallel, and the report lists those 100 only."""
-    add = []
+    """crt.sh by organisation name (3 names at most): LISTS the domains certified under the same name
+    (100 at most), never adds them to the scan. The same organisation name can cover a public website
+    hosted by a third party while the audit covers an internal network: the auditor decides."""
     for o in ext["cert_orgs"][:3]:
         if stop and stop.is_set():
             break
@@ -146,21 +145,10 @@ def org_pivot(own, known, ext, log=print, stop=None):
             log(f"[pivot] crt.sh O={o} : {exc}")
             continue
         fresh = [d for d in domains if d not in own and d not in known][:100]
-        with ThreadPoolExecutor(16) as pool:
-            alive = list(pool.map(lambda x: False if stop and stop.is_set() else _resolves(x), fresh))
-        n = 0
-        for d, ok in zip(fresh, alive):
-            p = {"name": d, "via": f"crt.sh O={o}", "added": False}
-            if ok and n < 25:
-                p["added"] = True
-                add.append(d)
-                known.add(d)
-                own.add(d)
-                n += 1
-            ext["org_domains"].append(p)
-        more = f" ({len(domains) - len(fresh)} déjà connus ou au-delà des 100 examinés)" if len(domains) > len(fresh) else ""
-        log(f"[pivot] crt.sh O={o} : {len(domains)} domaine(s){more}, {n} ajouté(s) au scan")
-    return add
+        ext["org_domains"] += [{"name": d, "via": f"crt.sh O={o}", "added": False} for d in fresh]
+        log(f"[pivot] crt.sh O={o} : {len(fresh)} autre(s) domaine(s) au même nom, listés dans le rapport (non "
+            f"scannés : à ajouter aux cibles s'ils sont dans le périmètre)")
+    return []
 
 
 # --- RDAP netblocks -----------------------------------------------------------------------------
@@ -511,8 +499,12 @@ def extra_empty(e):
                          or e["github"] or e["ipv6_note"] or e["github_note"] or e["udp_note"])
 
 
-def _added(b):
-    return "ajouté au scan" if b else "hors organisation ou ne résout pas"
+def _added(p):
+    if p["added"]:
+        return "ajouté au scan"
+    if p["via"].startswith("crt.sh"):
+        return "non scanné : à ajouter aux cibles s'il est dans le périmètre"
+    return "hors des domaines scannés ou ne résout pas"
 
 
 def _ints(lst):
@@ -534,7 +526,7 @@ def extra_sections(e):
             out.append(f"<p>Organisation(s) des certificats : {esc(', '.join(e['cert_orgs']))}</p>")
         if names:
             out.append("<table><tr><th>Nom</th><th>Trouvé par</th><th>Suite</th></tr>")
-            out += [f"<tr><td>{esc(p['name'])}</td><td>{esc(p['via'])}</td><td>{_added(p['added'])}</td></tr>"
+            out += [f"<tr><td>{esc(p['name'])}</td><td>{esc(p['via'])}</td><td>{_added(p)}</td></tr>"
                     for p in names]
             out.append("</table>")
         if e["netblocks"]:
@@ -590,7 +582,7 @@ EXTRA_HEADER = ["type", "item", "detail", "finding", "extra"]
 def extra_rows(e):
     if not e:
         return []
-    rows = [["nom", p["name"], p["via"], _added(p["added"]), ""] for p in e["cert_names"] + e["org_domains"]]
+    rows = [["nom", p["name"], p["via"], _added(p), ""] for p in e["cert_names"] + e["org_domains"]]
     rows += [["bloc IP", b["cidr"], f"{b['name']} / {b['org']}", f"indice {b['match']}, vu depuis {b['from_ip']}",
               f"{b['scanned']} / {b['size']} IP scannées"] for b in e["netblocks"]]
     rows += [["udp", u["ip"], f"{u['port']}/udp {u['service']}", u["detail"], u["severity"]] for u in e["udp"]]

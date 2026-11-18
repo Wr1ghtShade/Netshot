@@ -3,6 +3,23 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.18] - 2026-11-18
+
+### Corrigé
+- **Sortie de périmètre par crt.sh** : un scan d'une IP du réseau interne lisait son certificat
+  (O=CENTRALE LILLE INSTITUT), cherchait ce nom dans crt.sh et **ajoutait au scan** les domaines
+  trouvés, dont le site public hébergé chez un tiers (hébergement mutualisé) : le scan basculait
+  sur une cible hors du périmètre demandé. Les domaines trouvés par nom d'organisation sont
+  maintenant **listés dans le rapport, jamais scannés** (« à ajouter aux cibles s'il est dans le
+  périmètre »). Seuls les noms des certificats qui appartiennent aux domaines déjà scannés sont
+  encore ajoutés (aucun pour un scan d'IP seules).
+- **Serveur SMTP pris pour un serveur FTP** : la règle générique « 220 » (salut FTP) passait avant
+  les règles des serveurs de messagerie ; un Exim répondant « 220-… ESMTP Exim 4.100.1 » était
+  affiché « FTP ». Les règles génériques passent désormais en dernier, avec une règle « SMTP »
+  (220 + ESMTP / SMTP / mail) avant celle du FTP.
+
+Fichiers : `core/discover.py`, `core/recon.py`, README, CHANGELOG.
+
 ## [1.2.17] - 2026-11-16
 
 ### Modifié

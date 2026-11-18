@@ -323,7 +323,7 @@ Section « Empreinte cloud et SaaS » en tête du rapport, `cloud.csv`, onglet �
 | Contrôle | Par défaut | Ce qui est fait |
 |---|---|---|
 | **Noms des certificats** | actif (`--no-pivot`) | le certificat servi sur le port 443 de chaque cible est lu ; ses noms (SAN) qui appartiennent aux domaines de l'organisation sont **ajoutés au scan** |
-| **crt.sh par organisation** | actif | le nom d'organisation (O=) des certificats OV / EV (hors CDN, hébergeurs, clouds) est cherché dans crt.sh : les domaines certifiés au même nom sont **ajoutés au scan** (25 au plus, ceux qui résolvent) |
+| **crt.sh par organisation** | actif | le nom d'organisation (O=) des certificats OV / EV (hors CDN, hébergeurs, clouds) est cherché dans crt.sh : les domaines certifiés au même nom sont **listés, jamais scannés** (100 au plus) ; à ajouter aux cibles s'ils sont dans le périmètre |
 | **Blocs d'IP de l'organisation** | actif | RDAP des IP publiques trouvées : les blocs dont le nom ou le titulaire correspond à l'organisation sont **listés, jamais scannés** (à ajouter au périmètre si le client confirme), avec la ligne de cibles prête à copier |
 | **Services UDP** | inactif (`--udp`, test actif) | une requête par IP cible : DNS (**résolveur ouvert**), NTP, SNMP (découverte SNMPv3, **aucune communauté essayée**), IKE (VPN IPsec), OpenVPN, SSDP (UPnP). Impossible à travers un proxy |
 | **Parité IPv4 / IPv6** | actif (`--no-ipv6-parity`) | les ports scannés de chaque nom double pile sont essayés en IPv4 et en IPv6 : un port ouvert **seulement en IPv6** trahit un filtrage oublié. Sauté si le poste n'a pas d'accès IPv6 |
@@ -470,7 +470,7 @@ Chaque scan crée un sous-dossier `scan_<domaine>_<date>` (ex. `scan_guifort.ovh
 | `--no-enrich` | désactive l'enrichissement des IP, la recherche des CVE dans NVD et la réputation des noms | enrichissement actif |
 | `--no-reputation` | désactive seulement la réputation des noms | réputation active |
 | `--no-cloud` | désactive l'empreinte cloud et SaaS | empreinte active |
-| `--no-cloud-targets` | n'ajoute au scan aucun nom trouvé (cloud, certificats, crt.sh) | ajout actif |
+| `--no-cloud-targets` | n'ajoute au scan aucun nom trouvé (cloud, certificats) | ajout actif |
 | `--no-pivot` | ne lit pas les certificats et ne cherche ni crt.sh par organisation ni les blocs d'IP | découverte active |
 | `--udp` | sondes UDP (DNS, NTP, SNMP, IKE, OpenVPN, SSDP) | inactif |
 | `--no-ipv6-parity` | ne compare pas les ports en IPv4 et en IPv6 | parité active |
