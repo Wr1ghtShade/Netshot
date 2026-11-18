@@ -3,6 +3,26 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Go a son
 propre journal dans le dépôt [Netshot-Go](https://github.com/Wr1ghtShade/Netshot-Go).
 
+## [1.2.19] - 2026-11-18
+
+### Modifié
+- **Plus aucun ajout automatique au scan par défaut** : une découverte n'est pas un périmètre.
+  Les noms trouvés par l'empreinte cloud (autres domaines du tenant, fournisseur d'identité, pages
+  SharePoint) et par les certificats sont **listés** dans le rapport (« Découvert(s), non
+  scanné(s) », « Non scannés, à ajouter aux cibles s'ils sont dans le périmètre », avec la ligne de
+  cibles à copier), dans `cloud.csv` / `discovery.csv` (type « découverte ») et dans
+  `results.json` (`candidates`, `candidate`). Le journal le rappelle :
+  « [découverte] N cible(s) découverte(s), non scannées … ».
+- **`--add-discovered`** (et l'interrupteur « Ajouter les découvertes au scan », désactivé par
+  défaut, dans Analyse passive) rétablit l'ajout, avec les mêmes garde-fous qu'avant (noms qui
+  résolvent, exclusions, pages SaaS sur le 443 seulement et sans sondes actives).
+- `--no-cloud-targets` est devenu sans effet (accepté pour les anciens scripts).
+
+Vérifié : scan de démonstration avec une découverte simulée, listée sans être scannée par défaut,
+scannée avec `--add-discovered`.
+
+Fichiers : `core/scan.py`, `core/cloud.py`, `core/discover.py`, `core/gui.py`, README, CHANGELOG.
+
 ## [1.2.18] - 2026-11-18
 
 ### Corrigé

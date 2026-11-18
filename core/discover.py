@@ -502,6 +502,8 @@ def extra_empty(e):
 def _added(p):
     if p["added"]:
         return "ajouté au scan"
+    if p.get("candidate"):
+        return "découvert, non scanné : à ajouter aux cibles s'il est dans le périmètre"
     if p["via"].startswith("crt.sh"):
         return "non scanné : à ajouter aux cibles s'il est dans le périmètre"
     return "hors des domaines scannés ou ne résout pas"
@@ -529,6 +531,10 @@ def extra_sections(e):
             out += [f"<tr><td>{esc(p['name'])}</td><td>{esc(p['via'])}</td><td>{_added(p)}</td></tr>"
                     for p in names]
             out.append("</table>")
+            todo = [p["name"] for p in names if p.get("candidate") or (not p["added"] and p["via"].startswith("crt.sh"))]
+            if todo:
+                out.append(f"<p>Non scannés, à ajouter aux cibles s'ils sont dans le périmètre : "
+                           f"<code>{esc(' '.join(todo))}</code></p>")
         if e["netblocks"]:
             out.append("<p>Blocs d'IP enregistrés au nom de l'organisation (RDAP) : <b>non scannés</b>, à ajouter au "
                        "périmètre si le client confirme qu'ils sont à lui.</p><table><tr><th>Bloc</th><th>Nom</th>"

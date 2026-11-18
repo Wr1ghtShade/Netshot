@@ -602,8 +602,6 @@ def discover_cloud(hosts, log=print, stop=None):
         if t["name"]:
             add(f"{t['name']}.sharepoint.com", True)
             add(f"{t['name']}-my.sharepoint.com", True)
-    if rep["added"]:
-        log(f"[cloud] {len(rep['added'])} cible(s) ajoutée(s) au scan : {', '.join(rep['added'])}")
     rep["org_domains"] = sorted(own)
     return rep, full, web
 
@@ -665,7 +663,7 @@ def finish_cloud(rep, results, exposures, takeovers, log=print, stop=None):
 # --- Output -------------------------------------------------------------------------------------
 
 def _empty(rep):
-    return not rep or not (rep["tenants"] or rep["services"] or rep["ips"] or rep["added"])
+    return not rep or not (rep["tenants"] or rep["services"] or rep["ips"] or rep["added"] or rep.get("candidates"))
 
 
 def cloud_section(rep):
@@ -687,6 +685,9 @@ def cloud_section(rep):
         out.append("</table>")
     if rep["added"]:
         out.append(f"<p>Ajouté(s) au scan : {e(', '.join(rep['added']))}</p>")
+    if rep.get("candidates"):
+        out.append(f"<p><b>Découvert(s), non scanné(s)</b> (à ajouter aux cibles s'ils sont dans le périmètre, ou "
+                   f"relancer avec « Ajouter les découvertes au scan ») : <code>{e(' '.join(rep['candidates']))}</code></p>")
     if rep["services"]:
         from .recon import _sev
         out.append("<table><tr><th>Catégorie</th><th>Service</th><th>Nom</th><th>Indice</th><th>Valeur</th></tr>")
@@ -720,6 +721,8 @@ def cloud_rows(rep):
     rows += [["ip", x["provider"], x["service"], x["ip"], x["region"], f"{x['prefix']} ; {' '.join(x['hosts'])}"]
              for x in rep["ips"]]
     rows += [["ajout", a, "", "", "", "ajouté au scan"] for a in rep["added"]]
+    rows += [["découverte", a, "", "", "", "non scanné : à ajouter aux cibles s'il est dans le périmètre"]
+             for a in rep.get("candidates") or []]
     return rows
 
 

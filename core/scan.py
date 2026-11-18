@@ -696,14 +696,17 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
     cloud, web_only = None, set()
     if getattr(args, "cloud", True) and not (stop and stop.is_set()):
         cloud, full, web = await asyncio.to_thread(discover_cloud, hosts, log, stop)
-        if getattr(args, "cloud_targets", True):
+        if getattr(args, "cloud_targets", False):
             added = full + web
             if excl and added:
                 added = await asyncio.to_thread(excl.filter, added, log)
             web_only = {h for h in added if h in web}
             hosts = hosts + added
+            if cloud["added"]:
+                log(f"[cloud] {len(cloud['added'])} cible(s) ajoutée(s) au scan : {', '.join(cloud['added'])}")
         else:
-            cloud["added"] = []
+            # default: a discovery is not a scope; listed in the report, never scanned
+            cloud["candidates"], cloud["added"] = cloud["added"], []
     ext = new_extra()
     own_domains = list((cloud or {}).get("org_domains") or cloud_domains(hosts))
     if getattr(args, "pivot", True) and not (stop and stop.is_set()):
@@ -717,13 +720,19 @@ async def main_async(args, hosts, ports, log=print, stop=None, on_progress=None,
             known = {h.lower() for h in hosts + added}
             added += await asyncio.to_thread(org_pivot, own, known, ext, log, stop)
             own_domains = sorted(own)
-            if getattr(args, "cloud_targets", True):
+            if getattr(args, "cloud_targets", False):
                 if excl and added:
                     added = await asyncio.to_thread(excl.filter, added, log)
                 hosts = hosts + added
             else:
-                for p in ext["cert_names"] + ext["org_domains"]:
-                    p["added"] = False
+                for p in ext["cert_names"]:
+                    p["candidate"], p["added"] = p["added"], False
+    if not getattr(args, "cloud_targets", False):
+        n = (len((cloud or {}).get("candidates") or []) + len(ext["org_domains"])
+             + sum(1 for p in ext["cert_names"] if p.get("candidate")))
+        if n:
+            log(f"[découverte] {n} cible(s) découverte(s), non scannées (hors périmètre tant que non confirmées) : "
+                "voir le rapport. Option « Ajouter les découvertes au scan » / --add-discovered pour les scanner.")
     proxy = getattr(args, "proxy", None)
     if proxy:
         log(f"[proxy] pages, favicons et dossiers via {proxy['server']}"
@@ -908,8 +917,11 @@ def main():
                          "(active)")
     ap.add_argument("--no-ipv6-parity", action="store_true",
                     help="do not compare the scanned ports of the dual-stack names on IPv4 and IPv6")
+    ap.add_argument("--add-discovered", action="store_true",
+                    help="add the names found by the cloud footprint and the certificates to the scan (default: "
+                         "listed in the report only, as a discovery is not a scope)")
     ap.add_argument("--no-cloud-targets", action="store_true",
-                    help="keep the cloud footprint but do not add the domains and tenant pages found to the scan")
+                    help="obsolete: nothing found is added to the scan unless --add-discovered")
     ap.add_argument("--no-reputation", action="store_true",
                     help="do not check the reputation of the host names (block lists, URLhaus, Criminal IP); "
                          "--no-enrich turns it off too")
@@ -1024,7 +1036,7 @@ def main():
     args.enrich = not args.no_enrich
     args.reputation = args.enrich and not args.no_reputation
     args.cloud = not args.no_cloud
-    args.cloud_targets = not args.no_cloud_targets
+    args.cloud_targets = args.add_discovered
     args.pivot = not args.no_pivot
     try:
         args.stealth_delay = parse_stealth_delay(args.stealth_delay)

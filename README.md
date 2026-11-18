@@ -302,16 +302,17 @@ cherche, sans clé et sans rien scanner chez le fournisseur :
 | **IP chez un fournisseur cloud** | plages publiées par AWS, Azure (Service Tags), Google Cloud et Cloudflare, gardées 7 jours en cache | fournisseur, service (S3, EC2, AzureAppService…), région, plage |
 | **CNAME orphelins** | contrôle de prise de contrôle de sous-domaine (lancé aussi sans l'analyse des pages) | risque de *subdomain takeover* |
 
-**Ce qui est découvert est ajouté au scan habituel** : les autres domaines du tenant et le
-fournisseur d'identité de l'organisation (ex. `sts.exemple.fr`) sur tous les ports demandés ; les
-pages SaaS du tenant (`xxx.sharepoint.com`, `xxx-my.sharepoint.com`, fournisseur d'identité hébergé
-comme `exemple.okta.com`) sur le **port 443 seulement**, une page https comme l'ouvrirait un
-navigateur. Seuls les noms qui résolvent sont ajoutés, et le fichier d'exclusions s'applique.
-Les domaines de l'organisation ajoutés passent par **tout** le scan habituel, y compris la
-recherche de dossiers et de fichiers sensibles (`--dirs`, `--files`) et la sonde WAF quand elles
-sont activées. Les pages SaaS du tenant, elles, n'ont que la capture et l'analyse passive : ni
-dossiers, ni fichiers, ni sonde WAF, car c'est l'infrastructure du fournisseur, pas celle du client.
-`--no-cloud-targets` garde l'empreinte sans rien ajouter ; `--no-cloud` (ou la case « Empreinte
+**Une découverte n'est pas un périmètre : par défaut, rien n'est ajouté au scan.** Les autres
+domaines du tenant, le fournisseur d'identité et les pages SaaS du tenant sont **listés** dans le
+rapport (« Découvert(s), non scanné(s) », avec la ligne de cibles à copier) et le journal le
+rappelle. Pour les scanner aussitôt : `--add-discovered` (ou « Ajouter les découvertes au
+scan » dans l'interface), seulement si l'autorisation d'audit couvre tous les domaines du client.
+Dans ce cas, les domaines de l'organisation passent par **tout** le scan habituel (dossiers,
+fichiers sensibles et sonde WAF compris quand ils sont activés) ; les pages SaaS du tenant
+(`xxx.sharepoint.com`, `exemple.okta.com`…) sont vues sur le **port 443 seulement**, en capture et
+analyse passive, car c'est l'infrastructure du fournisseur. Seuls les noms qui résolvent sont
+retenus, et le fichier d'exclusions s'applique.
+`--no-cloud` (ou la case « Empreinte
 cloud et SaaS » de l'interface) la désactive. Les noms de buckets ou de comptes de stockage ne sont
 **jamais devinés** : ce serait sonder des ressources qui n'appartiennent peut-être pas au client.
 
@@ -322,15 +323,14 @@ Section « Empreinte cloud et SaaS » en tête du rapport, `cloud.csv`, onglet �
 
 | Contrôle | Par défaut | Ce qui est fait |
 |---|---|---|
-| **Noms des certificats** | actif (`--no-pivot`) | le certificat servi sur le port 443 de chaque cible est lu ; ses noms (SAN) qui appartiennent aux domaines de l'organisation sont **ajoutés au scan** |
+| **Noms des certificats** | actif (`--no-pivot`) | le certificat servi sur le port 443 de chaque cible est lu ; ses noms (SAN) qui appartiennent aux domaines scannés sont **listés** (scannés avec `--add-discovered`) |
 | **crt.sh par organisation** | actif | le nom d'organisation (O=) des certificats OV / EV (hors CDN, hébergeurs, clouds) est cherché dans crt.sh : les domaines certifiés au même nom sont **listés, jamais scannés** (100 au plus) ; à ajouter aux cibles s'ils sont dans le périmètre |
 | **Blocs d'IP de l'organisation** | actif | RDAP des IP publiques trouvées : les blocs dont le nom ou le titulaire correspond à l'organisation sont **listés, jamais scannés** (à ajouter au périmètre si le client confirme), avec la ligne de cibles prête à copier |
 | **Services UDP** | inactif (`--udp`, test actif) | une requête par IP cible : DNS (**résolveur ouvert**), NTP, SNMP (découverte SNMPv3, **aucune communauté essayée**), IKE (VPN IPsec), OpenVPN, SSDP (UPnP). Impossible à travers un proxy |
 | **Parité IPv4 / IPv6** | actif (`--no-ipv6-parity`) | les ports scannés de chaque nom double pile sont essayés en IPv4 et en IPv6 : un port ouvert **seulement en IPv6** trahit un filtrage oublié. Sauté si le poste n'a pas d'accès IPv6 |
 | **Code public (GitHub)** | avec la clé `github` (jeton GitHub sans droit particulier) | recherche de code des domaines de l'organisation, seule et avec password / secret / token / apikey : dépôt, fichier et lien (les fichiers ne sont **pas téléchargés**) |
 
-Les ajouts au scan suivent les mêmes règles que l'empreinte cloud : seuls les noms qui résolvent,
-fichier d'exclusions appliqué, `--no-cloud-targets` pour ne rien ajouter. Sections du rapport,
+Comme pour l'empreinte cloud, rien n'est ajouté au scan sans `--add-discovered`. Sections du rapport,
 `discovery.csv`, onglet « Découverte » de `results.xlsx`, clé `discovery` de `results.json`.
 
 ### 🥷 Mode furtif
@@ -470,7 +470,7 @@ Chaque scan crée un sous-dossier `scan_<domaine>_<date>` (ex. `scan_guifort.ovh
 | `--no-enrich` | désactive l'enrichissement des IP, la recherche des CVE dans NVD et la réputation des noms | enrichissement actif |
 | `--no-reputation` | désactive seulement la réputation des noms | réputation active |
 | `--no-cloud` | désactive l'empreinte cloud et SaaS | empreinte active |
-| `--no-cloud-targets` | n'ajoute au scan aucun nom trouvé (cloud, certificats) | ajout actif |
+| `--add-discovered` | scanne aussi les noms découverts (empreinte cloud, certificats) au lieu de seulement les lister | inactif |
 | `--no-pivot` | ne lit pas les certificats et ne cherche ni crt.sh par organisation ni les blocs d'IP | découverte active |
 | `--udp` | sondes UDP (DNS, NTP, SNMP, IKE, OpenVPN, SSDP) | inactif |
 | `--no-ipv6-parity` | ne compare pas les ports en IPv4 et en IPv6 | parité active |

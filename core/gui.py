@@ -476,6 +476,7 @@ class NetshotApp:
         self.reputation = tk.BooleanVar(value=True)
         self.cloud = tk.BooleanVar(value=True)
         self.pivot = tk.BooleanVar(value=True)
+        self.add_discovered = tk.BooleanVar(value=False)
         self.ipv6_parity = tk.BooleanVar(value=True)
         self.tls_scan = tk.BooleanVar(value=True)
         self.label_shots = tk.BooleanVar(value=True)
@@ -483,6 +484,8 @@ class NetshotApp:
         option(passive, self.reputation, "Réputation des noms", "Listes de blocage DNS, URLhaus, Criminal IP")
         option(passive, self.cloud, "Empreinte cloud et SaaS", "Tenant M365, SaaS, AWS / Azure / GCP")
         option(passive, self.pivot, "Découverte élargie", "Certificats, crt.sh par organisation, blocs d'IP")
+        option(passive, self.add_discovered, "Ajouter les découvertes au scan",
+               "Sinon listées dans le rapport, non scannées")
         option(passive, self.ipv6_parity, "Parité IPv4 / IPv6", "Ports ouverts d'un côté seulement")
         option(passive, self.tls_scan, "Analyser les certificats TLS", "Versions, suites, PQC, chaîne, HSTS")
         option(passive, self.label_shots, "Inscrire l'URL sur les captures", "Bandeau hôte:port, URL, statut, date")
@@ -1535,7 +1538,7 @@ class NetshotApp:
                                page_timeout=page_timeout, delay=delay, user_agents=user_agents,
                                width=width, height=height, enrich=self.enrich.get(),
                                reputation=self.reputation.get(), cloud=self.cloud.get(),
-                               cloud_targets=True, pivot=self.pivot.get(), ipv6_parity=self.ipv6_parity.get(),
+                               cloud_targets=self.add_discovered.get(), pivot=self.pivot.get(), ipv6_parity=self.ipv6_parity.get(),
                                udp=self.udp.get(), keys=dict(self.keys), stealth=self.stealth.get(),
                                stealth_delay=stealth_delay,
                                tls=self.tls_scan.get(), label=self.label_shots.get(),
